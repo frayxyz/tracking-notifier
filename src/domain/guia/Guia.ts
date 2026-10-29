@@ -41,7 +41,7 @@ export class Guia {
   registrarEvento(solicitud: SolicitudDeEvento): EventoDeEstado {
     const estadoActual = this.estadoActual();
     if (estadoActual !== null && !estadoActual.puedeTransicionarA(solicitud.estado)) {
-      throw new TransicionInvalidaParaGuia(estadoActual.valor, solicitud.estado.valor);
+      throw nuevaTransicionInvalida(estadoActual, solicitud.estado);
     }
     const evento = EventoDeEstado.crear({
       eventId: solicitud.eventId,
@@ -65,4 +65,21 @@ class TransicionInvalidaParaGuia extends ErrorNegocio {
       `Guide in terminal status '${estadoActual}' cannot transition to '${estadoSolicitado}'`,
     );
   }
+}
+
+class RegresionInvalidaParaGuia extends ErrorNegocio {
+  constructor(estadoActual: string, estadoSolicitado: string) {
+    super(
+      "INVALID_TRANSITION",
+      409,
+      `Guide in state '${estadoActual}' cannot go back to '${estadoSolicitado}'`,
+    );
+  }
+}
+
+function nuevaTransicionInvalida(estadoActual: EstadoGuia, destino: EstadoGuia): ErrorNegocio {
+  if (estadoActual.esTerminal()) {
+    return new TransicionInvalidaParaGuia(estadoActual.valor, destino.valor);
+  }
+  return new RegresionInvalidaParaGuia(estadoActual.valor, destino.valor);
 }
