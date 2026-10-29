@@ -107,6 +107,9 @@ el HMAC del body crudo con su secreto.
 
 La especificación OpenAPI se sirve en **`GET /openapi.json`** (generada desde los mismos
 esquemas Zod de validación) y está exportada como snapshot en `docs/openapi.yaml`.
+Además, **Swagger UI interactivo** en **`http://localhost:3000/docs`** — permite ejecutar
+cada endpoint directamente desde el navegador (recuerda poner el header `X-Tenant-Id`
+mediante el botón *Authorize*, tipo *apiKey*).
 
 | Método | Ruta | Descripción |
 |---|---|---|
@@ -114,6 +117,7 @@ esquemas Zod de validación) y está exportada como snapshot en `docs/openapi.ya
 | `GET` | `/v1/guides/:guiaId` | Historial cronológico + estado actual (aislamiento por tenant) |
 | `PUT` | `/v1/webhook` | Configura/rota la URL del webhook del tenant |
 | `GET` | `/v1/notifications` | Consulta del outbox (`?status=PENDING|DELIVERED|FAILED`) |
+| `GET` | `/docs` | Swagger UI interactivo (consume `/openapi.json`) |
 | `GET` | `/openapi.json` | Especificación OpenAPI |
 | `GET` | `/healthz` | Health check |
 

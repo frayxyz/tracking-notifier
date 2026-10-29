@@ -3,6 +3,7 @@ import type { Logger } from "../../config/logger.js";
 import { ErrorNegocio } from "../../domain/errors.js";
 import type { DependenciasHttp } from "./dependencias.js";
 import { middlewareDeTenant } from "./middleware/tenant.middleware.js";
+import swaggerUi from "swagger-ui-express";
 import { construirError } from "./error-body.js";
 import { montarRutas } from "./rutas.js";
 import { construirOpenApiDocument } from "./openapi/construir-documento.js";
@@ -19,6 +20,8 @@ export function createApp(logger: Logger, deps: DependenciasHttp): Express {
   app.get("/openapi.json", (_req: Request, res: Response) => {
     res.status(200).json(construirOpenApiDocument());
   });
+
+  app.use("/docs", swaggerUi.serve, swaggerUi.setup(construirOpenApiDocument()));
 
   const rutas = Router();
   rutas.use(middlewareDeTenant);

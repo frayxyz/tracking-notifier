@@ -28,4 +28,21 @@ describe("app base HTTP", () => {
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("INVALID_BODY");
   });
+
+  it("openapi.json expone el contrato de la API", async () => {
+    const { app } = construirAppDePrueba();
+    const res = await request(app).get("/openapi.json");
+    expect(res.status).toBe(200);
+    expect(res.body.openapi).toMatch(/^3\./);
+    expect(Object.keys(res.body.paths)).toEqual(
+      expect.arrayContaining(["/v1/events", "/v1/guides/{guiaId}", "/v1/webhook", "/v1/notifications"]),
+    );
+  });
+
+  it("Swagger UI montado en /docs sirve HTML interactivo", async () => {
+    const { app } = construirAppDePrueba();
+    const res = await request(app).get("/docs/");
+    expect(res.status).toBe(200);
+    expect(res.text).toContain("swagger-ui");
+  });
 });
