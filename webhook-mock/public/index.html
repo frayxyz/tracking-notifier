@@ -127,7 +127,10 @@ async function actualizarFirma(tarjeta) {
   const secreto = inputSecreto.value.trim();
   const firma = tarjeta.dataset.firma;
   if (!firma || !secreto) {
-    span.innerHTML = `<span class="veredicto">firma ${firma ? firma.slice(0, 22) + "…" : "— sin firma"} (pega el webhookSecret para validar)</span>`;
+    const mensaje = firma
+      ? `firma ${firma.slice(0, 22)}… · pega el webhookSecret para validar`
+      : "POST manual de prueba (sin firma — las notificaciones del worker siempre van firmadas)";
+    span.innerHTML = `<span class="veredicto">${mensaje}</span>`;
     return;
   }
   const hex = firma.startsWith("sha256=") ? firma.slice(7) : firma;
@@ -158,11 +161,12 @@ function pintar(entrega) {
   } catch { /* cuerpo no JSON */ }
 
   const hora = new Date(entrega.ts).toLocaleTimeString();
+  const metodo = entrega.method || "POST";
   tarjeta.innerHTML = `
     <div class="cabecera">
       <span class="hora">#${entrega.n} · ${hora}</span>
       <span class="badge ${entrega.tipo === "RECEPCION_OK" ? "ok" : "fallo"}">${entrega.tipo} · HTTP ${entrega.estadoHttp}</span>
-      <span class="badge estado">path: ${entrega.path}</span>
+      <span class="badge estado">${metodo} ${entrega.path}</span>
       ${estadoChip}${guia}
     </div>
     <div class="firma"></div>

@@ -37,6 +37,17 @@ const servidor = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method !== "POST") {
+    if (req.url === "/favicon.ico") {
+      res.writeHead(204);
+      res.end();
+      return;
+    }
+    res.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+    res.end("Solo se registran POSTs como entregas");
+    return;
+  }
+
   const trozos = [];
   req.on("data", (t) => trozos.push(t));
   req.on("end", () => {
@@ -47,6 +58,7 @@ const servidor = http.createServer((req, res) => {
     const entrega = {
       n: siguienteId,
       ts: new Date().toISOString(),
+      method: req.method,
       path: req.url || "",
       estadoHttp: esFallo ? 500 : 200,
       firma: req.headers["x-signature"] || null,
