@@ -200,21 +200,34 @@ todo al arranque (inyección explícita, sin contenedor mágico).
    `DUPLICADO → 200` sin duplicar evento ni notificación.
 4. **Estados terminales y reglas de transición** — la máquina de estados actúa en dos niveles:
    - **Terminales en absoluto**: `ENTREGADA` y `DEVUELTA` rechazan **cualquier evento nuevo** con
-     `409 INVALID_TRANSITION` (no cambian de estado, ni siquiera hacia sí mismas con datos nuevos).
-     La única respuesta posible es la repetición del **mismo eventId** ya registrado, que responde
+     `409 INVALID_TRANSITION` — incluso uno tardío con `fechaEvento` anterior al estado final, o un
+     `ENTREGADA→ENTREGADA` repetido con datos nuevos. No se permite backfill bajo estado final.
+     La única respuesta sin 409 es el reenvío del **mismo `eventId`** ya registrado, que responde
      `200 DUPLICADO` por idempotencia (no es un evento nuevo: no cambia nada).
-   - **Regresión bloqueada**: `EN_RUTA → CREADA` se rechaza con `409` (una guía no "vuelve a nacer").
-   - **Deduplicación por estado** (estados no terminales): un evento nuevo cuyo estado, `fechaEvento`
-     y `observacion` son **idénticos** al evento vigente se responde `200 DUPLICADO` sin persistir
-     nada (es la misma lectura reenviada con otro `eventId`).
-   - **Re-escaneo enriquecido**: mismo estado pero con `fechaEvento` u `observacion` distintas se
-     acepta (`201 ACEPTADO`) como lectura nueva + su notificación (fiel a "por cada evento aceptado
-     se notifica"). El estado solo se mueve hacia adelante; el dedup fuerte sigue garantizado por
-     `eventId`, y por estado+contenido para lecturas repetidas.
-5. **Estado actual de la guía** — es el del evento con `fechaEvento` más reciente
-   (desempate por `fechaRegistro`), no el último recibido: refleja el significado de
-   "historial cronológico" del enunciado. Los eventos que se reciben fuera de orden
-   (con `fechaEvento` anterior) se validan contra el estado vigente en recepción.
+   - **Regresión en tiempo real bloqueada**: `EN_RUTA → CREADA` con `fechaEvento` posterior al
+     vigente se rechaza con `409` (una guía no "vuelve a nacer").
+   - **Deduplicación por contenido** (estados no terminales): un evento nuevo cuyo estado,
+     `fechaEvento` y `observacion` son **idénticos** al evento vigente se responde
+     `200 DUPLICADO` sin persistir nada (misma lectura reenviada con otro `eventId`).
+   - **Re-escaneo enriquecido**: mismo estado con `fechaEvento` u `observacion` distintas se
+     acepta (`201`) como lectura nueva + su notificación.
+5. **Eventos fuera de orden (inserciones históricas)** — la secuencia lógica del dominio es la
+   **`fechaEvento` + estado**, no el orden de llegada:
+   - Un evento con `fechaEvento` **anterior** al vigente se acepta como **inserción histórica**:
+     se posiciona cronológicamente en el historial y el `estadoActual` **no cambia** (sigue siendo
+     el del evento con mayor `fechaEvento`).
+   - Coherencia exigida: el estado del tardío debe poder transicionar hacia el estado del evento
+     que le sigue en el tiempo (ej: insertar `CREADA` antes de `EN_RUTA` es válido; insertar
+     `ENTREGADA` antes de `EN_RUTA` sería incoherente → `409 INVALID_TRANSITION`).
+   - Un evento tardío aceptado **sí genera su notificación webhook** ("por cada evento aceptado
+     se notifica" — para el tenant es información nueva aunque histórica).
+   - El primer evento de una guía nueva puede ser cualquier estado no terminal (una guía puede
+     iniciar directamente en `EN_RUTA`).
+   - Base de la decisión: las reglas de negocio de 1)–5) se convalidaron con el emisor del reto
+     por correo el 2026-10-29; si la convalidación corrige algún supuesto, se aplica el mismo día.
+6. **Estado actual de la guía** — es el del evento con `fechaEvento` más reciente
+   (desempate por `fechaRegistro`), coherente con el historial cronológico. Fijado en el
+   agregado: "vigente" tiene una única definición en el dominio.
 6. **Tenant** — `X-Tenant-Id` se confía (simulado por Gateway); el servicio verifica formato UUID,
    no existencia. El tenant nace a la hora de configurar su webhook; toda lectura/escritura filtra
    por tenant y las `UNIQUE` están por `(tenant_id, …)`.

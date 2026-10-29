@@ -141,6 +141,43 @@ describe("POST /v1/events", () => {
     expect(notificaciones.cantidad()).toBe(antes.notificaciones);
   });
 
+  it("201 caso estrella: CREADA tardía llega después de EN_RUTA (fuera de orden por fecha)", async () => {
+    const guia = "77777777-7777-4444-8777-777777777777";
+    const enRuta = await request(app)
+      .post("/v1/events")
+      .set("X-Tenant-Id", TENANT)
+      .send({
+        eventId: "11119999-0505-4b2b-8ccc-dddddddddddd",
+        guiaId: guia,
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-02T10:00:00.000Z",
+      });
+    const tardia = await request(app)
+      .post("/v1/events")
+      .set("X-Tenant-Id", TENANT)
+      .send({
+        eventId: "11119999-0606-4b2b-8ccc-dddddddddddd",
+        guiaId: guia,
+        estado: "CREADA",
+        fechaEvento: "2026-01-01T08:00:00.000Z",
+        observacion: "llegada tardía",
+      });
+    expect(enRuta.status).toBe(201);
+    expect(tardia.status).toBe(201);
+    expect(tardia.body.estado).toBe("ACEPTADO");
+    expect(tardia.body.estadoActual).toBe("EN_RUTA");
+
+    const historial = await request(app)
+      .get(`/v1/guides/${guia}`)
+      .set("X-Tenant-Id", TENANT);
+    expect(historial.status).toBe(200);
+    expect(historial.body.estadoActual).toBe("EN_RUTA");
+    expect(historial.body.eventos.map((e: { eventId: string }) => e.eventId)).toEqual([
+      "11119999-0606-4b2b-8ccc-dddddddddddd",
+      "11119999-0505-4b2b-8ccc-dddddddddddd",
+    ]);
+  });
+
   it("400 cuando falta X-Tenant-Id o no es UUID", async () => {
     const sinHeader = await request(app).post("/v1/events").send({ eventId: "x" });
     expect(sinHeader.status).toBe(400);
