@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: tracking
+      POSTGRES_PASSWORD: tracking
+      POSTGRES_DB: tracking
+    volumes:
+      - datos_bd:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tracking -d tracking"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+  webhook-mock:
+    build: ./webhook-mock
+    environment:
+      PORT: "9000"
+      FAIL_PATHS: "/fail"
+    ports:
+      - "9000:9000"
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://tracking:tracking@db:5432/tracking
+      PORT: "3000"
+      LOG_LEVEL: info
+      WORKER_INTERVAL_MS: "2000"
+      WORKER_BATCH_SIZE: "5"
+      HTTP_TIMEOUT_MS: "5000"
+      MAX_ATTEMPTS: "5"
+      BACKOFF_BASE_MS: "1000"
+      WEBHOOK_HMAC_ENABLED: "true"
+    ports:
+      - "3000:3000"
+
+volumes:
+  datos_bd:
