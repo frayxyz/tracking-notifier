@@ -16,17 +16,6 @@ services:
       timeout: 3s
       retries: 12
 
-  jaeger:
-    image: jaegertracing/all-in-one:1.62.0
-    restart: unless-stopped
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
-      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
-    ports:
-      - "16686:16686"
-      - "4318:4318"
-      - "9411:9411"
-
   webhook-mock:
     build: ./webhook-mock
     restart: unless-stopped
@@ -52,10 +41,33 @@ services:
       MAX_ATTEMPTS: "5"
       BACKOFF_BASE_MS: "1000"
       WEBHOOK_HMAC_ENABLED: "true"
-      OTEL_ENABLED: "true"
-      OTEL_EXPORTER_URL: http://jaeger:9411/api/v2/spans
     ports:
       - "3000:3000"
 
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    restart: unless-stopped
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - datos_grafana:/var/lib/grafana
+    ports:
+      - "3001:3000"
+
 volumes:
   datos_bd:
+  datos_grafana:

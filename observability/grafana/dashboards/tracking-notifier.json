@@ -1,0 +1,99 @@
+{
+  "title": "tracking-notifier — métricas de negocio",
+  "uid": "tracking-notifier-biz",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "5s",
+  "time": { "from": "now-30m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Eventos aceptados (201)",
+      "description": "Eventos de cambio de estado de guías aceptados y persistidos",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "targets": [{ "expr": "tracking_eventos_aceptados_total", "refId": "A" }],
+      "options": { "colorMode": "value", "graphMode": "area", "textMode": "auto" },
+      "fieldConfig": { "defaults": { "color": { "mode": "palette-classic" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } }, "overrides": [] }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Eventos duplicados (idempotencia)",
+      "description": "Eventos ignorados porque el eventId ya estaba registrado o el contenido es idéntico al vigente",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "targets": [{ "expr": "tracking_eventos_duplicados_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "orange" }, "thresholds": { "steps": [{ "color": "orange", "value": null }] } }, "overrides": [] }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Eventos rechazados por motivo",
+      "description": "Rechazos por reglas de negocio: transicion_invalida (409), estado_invalido, payload_invalido (400)",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "targets": [
+        { "expr": "sum by (motivo) (increase(tracking_eventos_rechazados_total[5m]))", "legendFormat": "{{motivo}}", "refId": "A" }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Notificaciones entregadas al cliente",
+      "description": "Webhooks entregados con éxito por el outbox worker",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 4 },
+      "targets": [{ "expr": "tracking_notificaciones_entregadas_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "green" }, "thresholds": { "steps": [{ "color": "green", "value": null }] } }, "overrides": [] }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Notificaciones fallidas (5 intentos)",
+      "description": "Notificaciones en estado FAILED, consultables vía API",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 4 },
+      "targets": [{ "expr": "tracking_notificaciones_fallidas_total", "refId": "A" }],
+      "fieldConfig": { "defaults": { "color": { "mode": "fixed", "fixedColor": "red" }, "thresholds": { "steps": [{ "color": "red", "value": null }] } }, "overrides": [] }
+    },
+    {
+      "id": 6,
+      "type": "gauge",
+      "title": "Backlog del outbox (pendientes)",
+      "description": "Notificaciones PENDING esperando entrega ahora mismo",
+      "gridPos": { "h": 6, "w": 8, "x": 16, "y": 0 },
+      "targets": [{ "expr": "tracking_notificaciones_en_bandeja", "refId": "A" }],
+      "fieldConfig": { "defaults": { "min": 0, "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 50 }] } }, "overrides": [] }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Intentos de webhook: éxito vs fallo",
+      "description": "Cada intento del worker hacia el webhook del cliente (la historia de reintentos)",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        { "expr": "sum by (resultado) (increase(tracking_webhook_intentos_total[5m]))", "legendFormat": "{{resultado}}", "refId": "A" }
+      ],
+      "fieldConfig": { "defaults": { "custom": { "fillOpacity": 30 } }, "overrides": [] }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Latencia del webhook (p50 / p95)",
+      "description": "Duración del POST al cliente: percentil 50 y 95",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        { "expr": "histogram_quantile(0.50, sum by (le) (rate(tracking_webhook_latencia_segundos_bucket[5m])))", "legendFormat": "p50", "refId": "A" },
+        { "expr": "histogram_quantile(0.95, sum by (le) (rate(tracking_webhook_latencia_segundos_bucket[5m])))", "legendFormat": "p95", "refId": "B" }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Peticiones HTTP por ruta",
+      "description": "Tráfico de la API por ruta y código de respuesta",
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 },
+      "targets": [
+        { "expr": "sum by (route, status) (increase(http_requests_total[5m]))", "legendFormat": "{{route}} [{{status}}]", "refId": "A" }
+      ]
+    }
+  ]
+}

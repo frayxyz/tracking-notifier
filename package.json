@@ -19,13 +19,6 @@
     "openapi:export": "cross-env OPENSSL_ia32cap=~0x20000000 tsx scripts/export-openapi.ts"
   },
   "dependencies": {
-    "@opentelemetry/api": "1.9.0",
-    "@opentelemetry/exporter-trace-otlp-http": "0.57.2",
-    "@opentelemetry/instrumentation-express": "0.47.0",
-    "@opentelemetry/instrumentation-http": "0.57.2",
-    "@opentelemetry/instrumentation-pg": "0.51.1",
-    "@opentelemetry/sdk-node": "0.57.2",
-    "@opentelemetry/sdk-trace-base": "1.30.1",
     "@types/js-yaml": "^4.0.9",
     "drizzle-orm": "^0.36.4",
     "express": "^4.21.2",

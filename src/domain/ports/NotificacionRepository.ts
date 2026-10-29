@@ -11,4 +11,5 @@ export interface NotificacionRepository {
     limite: number;
     offset: number;
   }): Promise<Notificacion[]>;
+  contarPendientes(): Promise<number>;
 }

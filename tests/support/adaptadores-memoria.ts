@@ -68,6 +68,10 @@ export class RepositorioDeNotificacionesEnMemoria {
       .slice(filtro.offset, filtro.offset + filtro.limite);
   }
 
+  async contarPendientes(): Promise<number> {
+    return this.notificaciones.filter((n) => n.estado === "PENDING").length;
+  }
+
   cantidad(): number {
     return this.notificaciones.length;
   }

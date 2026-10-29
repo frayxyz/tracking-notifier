@@ -1,4 +1,4 @@
-import { and, asc, eq, lte } from "drizzle-orm";
+import { and, asc, count, eq, lte } from "drizzle-orm";
 import {
   Notificacion,
   type EstadoNotificacion,
@@ -54,7 +54,8 @@ export class NotificacionRepositoryDrizzle implements NotificacionRepository {
     const condiciones = [];
     if (filtro.tenantId) condiciones.push(eq(notificaciones.tenantId, filtro.tenantId));
     if (filtro.estado) condiciones.push(eq(notificaciones.estado, filtro.estado));
-    const rows = await this.proveedor.obtener()
+    const rows = await this.proveedor
+      .obtener()
       .select()
       .from(notificaciones)
       .where(condiciones.length > 0 ? and(...condiciones) : undefined)
@@ -62,6 +63,15 @@ export class NotificacionRepositoryDrizzle implements NotificacionRepository {
       .limit(filtro.limite)
       .offset(filtro.offset);
     return rows.map(mapearEntidad);
+  }
+
+  async contarPendientes(): Promise<number> {
+    const rows = await this.proveedor
+      .obtener()
+      .select({ total: count() })
+      .from(notificaciones)
+      .where(eq(notificaciones.estado, "PENDING"));
+    return Number(rows[0]?.total ?? 0);
   }
 }
 

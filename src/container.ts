@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Env } from "./config/env.js";
-import { createLogger, type Logger } from "./config/logger.js";import { ProveedorDeBaseDeDatos } from "./infrastructure/persistence/proveedor-db.js";
+import { createLogger, type Logger } from "./config/logger.js";
+import { ProveedorDeBaseDeDatos } from "./infrastructure/persistence/proveedor-db.js";
 import { migrar } from "./infrastructure/persistence/migrar.js";
 import { GuiaRepositoryDrizzle } from "./infrastructure/persistence/repos/GuiaRepositoryDrizzle.js";
 import { NotificacionRepositoryDrizzle } from "./infrastructure/persistence/repos/NotificacionRepositoryDrizzle.js";
@@ -62,12 +63,16 @@ export async function construirContainer(env: Env): Promise<Container> {
     consultarHistorial: new ConsultarHistorialDeGuiaUseCase(guiaRepository),
     configurarWebhook: new ConfigurarWebhookUseCase(webhookRepository, GeneradorDeSecretosReal),
     listarNotificaciones: new ListarNotificacionesUseCase(notificacionRepository),
+    metricas,
   };
 
-  const despachador = new HttpWebhookDispatcher({
-    timeoutMs: env.HTTP_TIMEOUT_MS,
-    firmaHmacActiva: env.WEBHOOK_HMAC_ENABLED,
-  });
+  const despachador = new HttpWebhookDispatcher(
+    {
+      timeoutMs: env.HTTP_TIMEOUT_MS,
+      firmaHmacActiva: env.WEBHOOK_HMAC_ENABLED,
+    },
+    metricas,
+  );
   const casoDespacho = new DespacharNotificacionesPendientesUseCase(
     notificacionRepository,
     webhookRepository,
@@ -79,7 +84,13 @@ export async function construirContainer(env: Env): Promise<Container> {
       backoffBaseMs: env.BACKOFF_BASE_MS,
     },
   );
-  const worker = new CicloDelWorker(casoDespacho, env.WORKER_INTERVAL_MS, logger, metricas);
+  const worker = new CicloDelWorker(
+    casoDespacho,
+    env.WORKER_INTERVAL_MS,
+    logger,
+    metricas,
+    () => notificacionRepository.contarPendientes(),
+  );
 
   return {
     env,

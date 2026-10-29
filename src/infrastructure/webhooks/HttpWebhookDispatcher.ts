@@ -1,10 +1,10 @@
 import { createHmac } from "node:crypto";
-import { trace } from "@opentelemetry/api";
 import type {
   DespachadorDeWebhook,
   ResultadoDespacho,
 } from "../../domain/ports/DespachadorDeWebhook.js";
 import type { PayloadWebhook } from "../../domain/notificacion/Notificacion.js";
+import type { MetricasDelServicio } from "../observability/metrics.js";
 
 const ALGORITMO_HMAC = "sha256";
 
@@ -14,7 +14,10 @@ export interface ConfiguracionDelDespachador {
 }
 
 export class HttpWebhookDispatcher implements DespachadorDeWebhook {
-  constructor(private readonly config: ConfiguracionDelDespachador) {}
+  constructor(
+    private readonly config: ConfiguracionDelDespachador,
+    private readonly metricas?: MetricasDelServicio,
+  ) {}
 
   async despachar(
     url: string,
@@ -22,37 +25,31 @@ export class HttpWebhookDispatcher implements DespachadorDeWebhook {
     secret: string,
   ): Promise<ResultadoDespacho> {
     const cuerpo = JSON.stringify(payload);
-    const tracer = trace.getTracer("tracking-notifier/webhooks");
-    return tracer.startActiveSpan("webhook.despachar", async (span) => {
-      span.setAttribute("webhook.url", url);
-      span.setAttribute("webhook.eventoId", payload.eventId);
-      try {
-        const respuesta = await fetch(url, {
-          method: "POST",
-          headers: construirEncabezados(cuerpo, secret, this.config),
-          body: cuerpo,
-          signal: AbortSignal.timeout(this.config.timeoutMs),
-        });
-        span.setAttribute("webhook.httpStatus", respuesta.status);
-        if (respuesta.ok) {
-          span.setStatus({ code: 1 });
-          return { exito: true, httpStatus: respuesta.status };
-        }
-        span.setStatus({ code: 2, message: `HTTP ${respuesta.status}` });
-        return {
-          exito: false,
-          httpStatus: respuesta.status,
-          error: `Respuesta HTTP ${respuesta.status} del webhook`,
-        };
-      } catch (err) {
-        const mensaje = err instanceof Error ? describeFallo(err) : String(err);
-        span.setStatus({ code: 2, message: mensaje });
-        span.recordException(err instanceof Error ? err : String(err));
-        return { exito: false, error: mensaje };
-      } finally {
-        span.end();
+    const inicio = Date.now();
+    try {
+      const respuesta = await fetch(url, {
+        method: "POST",
+        headers: construirEncabezados(cuerpo, secret, this.config),
+        body: cuerpo,
+        signal: AbortSignal.timeout(this.config.timeoutMs),
+      });
+      if (respuesta.ok) {
+        this.metricas?.registrarIntentoWebhook("exito", Date.now() - inicio);
+        return { exito: true, httpStatus: respuesta.status };
       }
-    });
+      this.metricas?.registrarIntentoWebhook("fallo", Date.now() - inicio);
+      return {
+        exito: false,
+        httpStatus: respuesta.status,
+        error: `Respuesta HTTP ${respuesta.status} del webhook`,
+      };
+    } catch (err) {
+      this.metricas?.registrarIntentoWebhook("fallo", Date.now() - inicio);
+      return {
+        exito: false,
+        error: err instanceof Error ? describeFallo(err) : String(err),
+      };
+    }
   }
 }
 

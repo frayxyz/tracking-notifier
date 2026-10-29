@@ -4,6 +4,7 @@ import { RegistrarEventoDeEstadoUseCase } from "../../src/application/use-cases/
 import { ConsultarHistorialDeGuiaUseCase } from "../../src/application/use-cases/ConsultarHistorialDeGuiaUseCase.js";
 import { ConfigurarWebhookUseCase } from "../../src/application/use-cases/ConfigurarWebhookUseCase.js";
 import { ListarNotificacionesUseCase } from "../../src/application/use-cases/ListarNotificacionesUseCase.js";
+import { MetricasDelServicio } from "../../src/infrastructure/observability/metrics.js";
 import { createLoggerStub } from "./logger-stub.js";
 import {
   RelojFijo,
@@ -23,6 +24,7 @@ export function construirAppDePrueba(): AppDePrueba {
   const eventos = new RepositorioDeEventosEnMemoria();
   const notificaciones = new RepositorioDeNotificacionesEnMemoria();
   const configuraciones = new RepositorioDeConfiguracionWebhookEnMemoria();
+  const metricas = new MetricasDelServicio();
 
   const app = createApp(createLoggerStub(), {
     registrarEvento: new RegistrarEventoDeEstadoUseCase(
@@ -36,7 +38,8 @@ export function construirAppDePrueba(): AppDePrueba {
       generar: () => "secreto-de-prueba",
     }),
     listarNotificaciones: new ListarNotificacionesUseCase(notificaciones),
-  });
+    metricas,
+  }, metricas);
 
   return { app, eventos, notificaciones };
 }

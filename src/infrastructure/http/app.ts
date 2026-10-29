@@ -31,11 +31,13 @@ export function createApp(logger: Logger, deps: DependenciasHttp, metricas?: Met
     res.status(200).json({ status: "ok" });
   });
 
-  if (metricas) {
-    app.get("/metrics", async (_req: Request, res: Response) => {
-      res.status(200).type("text/plain").send(await metricas.render());
-    });
-  }
+  app.get("/metrics", async (_req: Request, res: Response) => {
+    if (!metricas) {
+      res.status(404).json(construirError("NOT_FOUND", "Metrics not enabled"));
+      return;
+    }
+    res.status(200).type("text/plain").send(await metricas.render());
+  });
 
   app.get("/openapi.json", (_req: Request, res: Response) => {
     res.status(200).json(construirOpenApiDocument());
@@ -54,13 +56,14 @@ export function createApp(logger: Logger, deps: DependenciasHttp, metricas?: Met
     void req;
   });
 
-  app.use(errorHandler(logger));
+  app.use(errorHandler(logger, metricas));
   return app;
 }
 
-function errorHandler(logger: Logger) {
+function errorHandler(logger: Logger, metricas?: MetricasDelServicio) {
   return (err: unknown, _req: Request, res: Response, _next: NextFunction): void => {
     if (err instanceof ErrorNegocio) {
+      metricas?.registrarEventoRechazado(err.codigo);
       res
         .status(err.httpStatus)
         .json(construirError(err.codigo, err.message, err.detalles));

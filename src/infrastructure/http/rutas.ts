@@ -33,6 +33,11 @@ async function registrarEvento(req: Request, res: Response, deps: DependenciasHt
     observacion: payload.observacion,
   });
   res.status(resultado.estado === "ACEPTADO" ? 201 : 200).json(respuestaRegistro(resultado));
+  if (resultado.estado === "ACEPTADO") {
+    deps.metricas.registrarEventoAceptado();
+  } else {
+    deps.metricas.registrarEventoDuplicado();
+  }
 }
 
 function respuestaRegistro(r: ResultadoRegistro) {
