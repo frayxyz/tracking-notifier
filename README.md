@@ -300,8 +300,6 @@ todo al arranque (inyección explícita, sin contenedor mágico).
      se notifica" — para el tenant es información nueva aunque histórica).
    - El primer evento de una guía nueva puede ser cualquier estado no terminal (una guía puede
      iniciar directamente en `EN_RUTA`).
-   - Base de la decisión: las reglas de negocio de 1)–5) se convalidaron con el emisor del reto
-     por correo el 2026-10-29; si la convalidación corrige algún supuesto, se aplica el mismo día.
 6. **Estado actual de la guía** — es el del evento con `fechaEvento` más reciente
    (desempate por `fechaRegistro`), coherente con el historial cronológico. Fijado en el
    agregado: "vigente" tiene una única definición en el dominio.
