@@ -84,6 +84,63 @@ describe("POST /v1/events", () => {
     expect(reenviado.body.error.code).toBe("INVALID_TRANSITION");
   });
 
+  it("409 regresión EN_RUTA → CREADA con eventId nuevo", async () => {
+    const guia = "55555555-5555-4444-8555-555555555555";
+    const enRuta = await request(app)
+      .post("/v1/events")
+      .set("X-Tenant-Id", TENANT)
+      .send({
+        eventId: "11119999-0101-4b2b-8ccc-dddddddddddd",
+        guiaId: guia,
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T09:00:00.000Z",
+      });
+    expect(enRuta.status).toBe(201);
+
+    const regresion = await request(app)
+      .post("/v1/events")
+      .set("X-Tenant-Id", TENANT)
+      .send({
+        eventId: "11119999-0202-4b2b-8ccc-dddddddddddd",
+        guiaId: guia,
+        estado: "CREADA",
+        fechaEvento: "2026-01-01T10:00:00.000Z",
+      });
+    expect(regresion.status).toBe(409);
+    expect(regresion.body.error.code).toBe("INVALID_TRANSITION");
+  });
+
+  it("200 DUPLICADO por contenido cuando se re-lee el mismo estado con datos idénticos (eventId distinto)", async () => {
+    const guia = "66666666-6666-4444-8666-666666666666";
+    const primer = await request(app)
+      .post("/v1/events")
+      .set("X-Tenant-Id", TENANT)
+      .send({
+        eventId: "11119999-0303-4b2b-8ccc-dddddddddddd",
+        guiaId: guia,
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T09:00:00.000Z",
+        observacion: "escaneo hub",
+      });
+    const antes = { eventos: eventos.cantidad(), notificaciones: notificaciones.cantidad() };
+    const relectura = await request(app)
+      .post("/v1/events")
+      .set("X-Tenant-Id", TENANT)
+      .send({
+        eventId: "11119999-0404-4b2b-8ccc-dddddddddddd",
+        guiaId: guia,
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T09:00:00.000Z",
+        observacion: "escaneo hub",
+      });
+
+    expect(primer.status).toBe(201);
+    expect(relectura.status).toBe(200);
+    expect(relectura.body.estado).toBe("DUPLICADO");
+    expect(eventos.cantidad()).toBe(antes.eventos);
+    expect(notificaciones.cantidad()).toBe(antes.notificaciones);
+  });
+
   it("400 cuando falta X-Tenant-Id o no es UUID", async () => {
     const sinHeader = await request(app).post("/v1/events").send({ eventId: "x" });
     expect(sinHeader.status).toBe(400);
