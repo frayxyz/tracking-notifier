@@ -8,11 +8,13 @@ async function main(): Promise<void> {
   const server = container.app.listen(env.PORT, () => {
     container.logger.info({ port: env.PORT }, "tracking-notifier started");
   });
+  container.worker.iniciar();
 
   for (const signal of ["SIGINT", "SIGTERM"] as const) {
     process.on(signal, () => {
       container.logger.info({ signal }, "shutting down");
-      server.close(() => process.exit(0));
+      container.worker.detener();
+      void container.proveedor.cerrar().finally(() => server.close(() => process.exit(0)));
     });
   }
   process.on("unhandledRejection", (reason) => {

@@ -13,6 +13,9 @@ import { ListarNotificacionesUseCase } from "./application/use-cases/ListarNotif
 import type { Reloj } from "./domain/ports/Reloj.js";
 import { createApp } from "./infrastructure/http/app.js";
 import type { DependenciasHttp } from "./infrastructure/http/dependencias.js";
+import { HttpWebhookDispatcher } from "./infrastructure/webhooks/HttpWebhookDispatcher.js";
+import { DespacharNotificacionesPendientesUseCase } from "./application/use-cases/DespacharNotificacionesPendientesUseCase.js";
+import { CicloDelWorker } from "./infrastructure/worker/CicloDelWorker.js";
 
 const RelojSistema: Reloj = {
   ahora(): Date {
@@ -32,6 +35,7 @@ export interface Container {
   app: ReturnType<typeof createApp>;
   dependenciasHttp: DependenciasHttp;
   proveedor: ProveedorDeBaseDeDatos;
+  worker: CicloDelWorker;
 }
 
 export async function construirContainer(env: Env): Promise<Container> {
@@ -57,11 +61,29 @@ export async function construirContainer(env: Env): Promise<Container> {
     listarNotificaciones: new ListarNotificacionesUseCase(notificacionRepository),
   };
 
+  const despachador = new HttpWebhookDispatcher({
+    timeoutMs: env.HTTP_TIMEOUT_MS,
+    firmaHmacActiva: env.WEBHOOK_HMAC_ENABLED,
+  });
+  const casoDespacho = new DespacharNotificacionesPendientesUseCase(
+    notificacionRepository,
+    webhookRepository,
+    despachador,
+    RelojSistema,
+    {
+      tamanoLote: env.WORKER_BATCH_SIZE,
+      maxIntentos: env.MAX_ATTEMPTS,
+      backoffBaseMs: env.BACKOFF_BASE_MS,
+    },
+  );
+  const worker = new CicloDelWorker(casoDespacho, env.WORKER_INTERVAL_MS, logger);
+
   return {
     env,
     logger,
     app: createApp(logger, dependenciasHttp),
     dependenciasHttp,
     proveedor,
+    worker,
   };
 }
