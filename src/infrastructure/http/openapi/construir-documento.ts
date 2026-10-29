@@ -62,6 +62,25 @@ export function construirOpenApiDocument(): DocumentoOpenApi {
           responses: { "200": { description: "Servicio operativo" } },
         },
       },
+      "/metrics": {
+        get: {
+          tags: ["operaciones"],
+          summary: "Métricas Prometheus (http_requests, notificaciones, intentos de webhook)",
+          responses: {
+            "200": {
+              description: " exposition text/plain formato Prometheus",
+              content: { "text/plain": { schema: { type: "string" } } },
+            },
+          },
+        },
+      },
+      "/docs": {
+        get: {
+          tags: ["operaciones"],
+          summary: "Swagger UI interactivo (esta misma especificación)",
+          responses: { "200": { description: "HTML de Swagger UI" } },
+        },
+      },
       "/v1/events": {
         post: {
           tags: ["eventos"],

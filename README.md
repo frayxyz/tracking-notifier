@@ -117,6 +117,7 @@ mediante el botón *Authorize*, tipo *apiKey*).
 | `GET` | `/v1/guides/:guiaId` | Historial cronológico + estado actual (aislamiento por tenant) |
 | `PUT` | `/v1/webhook` | Configura/rota la URL del webhook del tenant |
 | `GET` | `/v1/notifications` | Consulta del outbox (`?status=PENDING|DELIVERED|FAILED`) |
+| `GET` | `/metrics` | Metricas Prometheus: `http_requests_total`, `notificaciones_entregadas_total`, `notificaciones_fallidas_total`, `webhook_attempts_total{resultado}` |
 | `GET` | `/docs` | Swagger UI interactivo (consume `/openapi.json`) |
 | `GET` | `/openapi.json` | Especificación OpenAPI |
 | `GET` | `/healthz` | Health check |
@@ -142,6 +143,30 @@ INVALID_BODY`, `404 GUIDE_NOT_FOUND · NOT_FOUND`, `409 INVALID_TRANSITION`, `50
 | **RF4** Notificar async (no bloquea, reintenta, FAILED consultable) | Unit: worker (entrega, backoff 1/2/4/8/16 s, 5 intentos→FAILED, sin webhook→FAILED) + dispatcher (HMAC-SHA256 verificado contra servidor real, 5xx, timeout) · **Integración e2e**: evento → notificación PENDING en BD real → worker → POST firmado verificado → `DELIVERED`; fallo ×5 → `FAILED` consultable vía listado; timeout; tenant sin webhook | demo.ps1 pasos 6–9 (`FALLO_INTENCIONAL ×5`, `RECEPCION_OK` con firma) |
 
 Comando único: `npm test` (unitarias + integración contra PostgreSQL real vía testcontainers).
+
+## Observabilidad (trazas y métricas)
+
+- **Trazas (OpenTelemetry → Jaeger)**: la API exporta spans automáticos (http → express → pg)
+  y spans de negocio (`outbox.ciclo` con resultados del batch, `webhook.despachar` con url,
+  httpStatus y errores). Al levantar compose, abre **http://localhost:16686** → servicio
+  `tracking-notifier` → verás el recorrido completo de cada petición y cada intento de webhook
+  (incluidos los reintentos fallidos hacia `/fail` con su motivo).
+  - Transporte: exporter **Zipkin** (JSON) de OTel hacia el colector Zipkin de Jaeger
+    (`:9411`); decisión pragmática: el transporte OTLP-HTTP del SDK de JS mostró problemas
+    de envío silencioso en este entorno, el Zipkin es el pipeline viejo y estable — igualmente
+    compatible con Jaeger y con cualquier backend Zipkin/OTel.
+  - Guard `OTEL_ENABLED`: en tests y modo local sin colector el tracing queda apagado (no
+    cambia el comportamiento de negocio ni añade latencia).
+- **Métricas (Prometheus)**: `GET /metrics` expone contadores del negocio (entregadas,
+  fallidas, intentos de webhook con etiqueta `resultado`, peticiones HTTP por ruta/estado)
+  más métricas por defecto del proceso. Listo para scrapes de Prometheus o Grafana.
+
+## Qué hace el webhook de prueba
+
+```text
+webhook-mock (compose) → imprime JSON por línea con: n° de entrega, path, X-Signature
+                         recibida y body crudo. Ruta /fail siempre falla (para ver reintentos).
+```
 
 ## Pruebas
 
