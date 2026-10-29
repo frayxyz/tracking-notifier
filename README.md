@@ -7,6 +7,17 @@ asíncrona con reintentos (timeout 5 s, backoff creciente, 5 intentos, `FAILED` 
 Arquitectura **hexagonal** (dominio puro sin framework ni ORM) para la prueba técnica de
 Desarrollador Backend Senior.
 
+## Vista rápida
+
+| | |
+|---|---|
+| ![Dashboard Grafana con métricas de negocio](docs/img/grafana.png) |
+| *Grafana (:3001) — métricas de negocio en vivo: aceptados, duplicados, entregas y reintentos* |
+| ![Swagger UI de la API](docs/img/swagger.png) |
+| *Swagger UI (:3000/docs) — contratos ejecutables desde el navegador (Authorize con X-Tenant-Id)* |
+| ![Vista de entregas del webhook de prueba](docs/img/webhook-vista.png) |
+| *Webhook de prueba (:9000) — entregas en vivo con validación de firma HMAC en el navegador* |
+
 ---
 
 ## Stack
