@@ -5,6 +5,7 @@ import type { DependenciasHttp } from "./dependencias.js";
 import { middlewareDeTenant } from "./middleware/tenant.middleware.js";
 import { construirError } from "./error-body.js";
 import { montarRutas } from "./rutas.js";
+import { construirOpenApiDocument } from "./openapi/construir-documento.js";
 
 export function createApp(logger: Logger, deps: DependenciasHttp): Express {
   const app = express();
@@ -13,6 +14,10 @@ export function createApp(logger: Logger, deps: DependenciasHttp): Express {
 
   app.get("/healthz", (_req: Request, res: Response) => {
     res.status(200).json({ status: "ok" });
+  });
+
+  app.get("/openapi.json", (_req: Request, res: Response) => {
+    res.status(200).json(construirOpenApiDocument());
   });
 
   const rutas = Router();
