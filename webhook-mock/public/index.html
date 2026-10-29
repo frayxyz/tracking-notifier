@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Webhook de prueba — tracking-notifier</title>
+<style>
+  :root {
+    --fondo: #0f1420;
+    --panel: #1a2233;
+    --panel2: #212b40;
+    --texto: #e8ecf5;
+    --texto-suave: #93a0b8;
+    --verde: #34d399;
+    --rojo: #f87171;
+    --ambar: #fbbf24;
+    --azul: #60a5fa;
+    --borde: #2c3852;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--fondo); color: var(--texto);
+    font-family: "Segoe UI", system-ui, sans-serif;
+    min-height: 100vh; padding: 24px;
+  }
+  header {
+    display: flex; align-items: center; gap: 16px; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--borde);
+    border-radius: 12px; padding: 16px 20px; margin-bottom: 16px;
+  }
+  h1 { font-size: 1.1rem; font-weight: 600; }
+  .punto { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+  .punto.vivo { background: var(--verde); box-shadow: 0 0 8px var(--verde); animation: pulso 1.5s infinite; }
+  .punto.muerto { background: var(--rojo); }
+  @keyframes pulso { 50% { opacity: .4; } }
+  .contador { font-size: .9rem; color: var(--texto-suave); }
+  .contador b { color: var(--texto); }
+  .chip-estado-http {
+    font-size: .75rem; padding: 2px 10px; border-radius: 999px;
+    background: var(--panel2); color: var(--azul);
+  }
+  #secreto {
+    background: var(--panel2); border: 1px solid var(--borde); color: var(--texto);
+    border-radius: 8px; padding: 8px 12px; font-size: .85rem; width: 320px;
+  }
+  button {
+    background: var(--panel2); color: var(--texto); border: 1px solid var(--borde);
+    border-radius: 8px; padding: 8px 14px; cursor: pointer; font-size: .85rem;
+  }
+  button:hover { border-color: var(--azul); }
+  .aviso {
+    background: var(--panel); border: 1px dashed var(--borde); border-radius: 12px;
+    padding: 14px 20px; color: var(--texto-suave); font-size: .9rem; margin-bottom: 16px;
+  }
+  .aviso code { color: var(--azul); }
+  main { display: flex; flex-direction: column; gap: 10px; }
+  .tarjeta {
+    background: var(--panel); border: 1px solid var(--borde); border-radius: 12px;
+    padding: 14px 18px; animation: entrada .25s ease-out;
+  }
+  @keyframes entrada { from { transform: translateY(-6px); opacity: 0; } }
+  .tarjeta.fallo { border-left: 4px solid var(--rojo); }
+  .tarjeta.ok { border-left: 4px solid var(--verde); }
+  .cabecera { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+  .badge { font-size: .72rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; letter-spacing: .3px; }
+  .badge.ok { background: rgba(52,211,153,.15); color: var(--verde); }
+  .badge.fallo { background: rgba(248,113,113,.15); color: var(--rojo); }
+  .badge.estado { background: rgba(96,165,250,.15); color: var(--azul); }
+  .hora { color: var(--texto-suave); font-size: .8rem; }
+  .firma { font-size: .78rem; margin-bottom: 8px; color: var(--texto-suave); }
+  .firma.veredicto { padding: 2px 8px; border-radius: 6px; }
+  .firma.veredicto.valida { background: rgba(52,211,153,.12); color: var(--verde); }
+  .firma.veredicto.invalida { background: rgba(248,113,113,.12); color: var(--rojo); }
+  pre {
+    background: var(--fondo); border: 1px solid var(--borde); border-radius: 8px;
+    padding: 10px 12px; font-size: .78rem; overflow-x: auto; color: #c9d4e8;
+    font-family: Consolas, monospace;
+  }
+  .vacio { text-align: center; color: var(--texto-suave); padding: 40px 0; }
+</style>
+</head>
+<body>
+<header>
+  <h1>📮 Webhook de prueba</h1>
+  <span class="punto muerto" id="punto"></span><span id="conexion">conectando…</span>
+  <span class="chip-estado-http" id="contador">total 0 · ok 0 · fallo 0</span>
+  <input id="secreto" type="password" placeholder="pega el webhookSecret para validar firmas">
+  <button id="limpiar">Limpiar vista</button>
+</header>
+
+<div class="aviso">
+  Cada notificación que el worker entrega a este webhook aparece aquí en vivo.
+  Configura el webhook del tenant hacia <code>http://webhook-mock:9000/webhooks</code>
+  (o <code>/fail</code> para simular fallos). La firma <code>X-Signature</code> se valida
+  en tu navegador si pegas el <code>webhookSecret</code> devuelto por la API.
+</div>
+
+<main id="feed"><div class="vacio">Sin entregas todavía — registra un evento en la API.</div></main>
+
+<script>
+const feed = document.getElementById("feed");
+const punto = document.getElementById("punto");
+const conexion = document.getElementById("conexion");
+const contador = document.getElementById("contador");
+const inputSecreto = document.getElementById("secreto");
+
+let totales = { total: 0, ok: 0, fallo: 0 };
+const verificados = new Map();
+
+inputSecreto.value = localStorage.getItem("webhookSecret") || "";
+inputSecreto.addEventListener("input", () => {
+  localStorage.setItem("webhookSecret", inputSecreto.value);
+  document.querySelectorAll(".tarjeta").forEach(actualizarFirma);
+});
+
+async function hmac(cuerpo, secreto) {
+  const clave = await crypto.subtle.importKey(
+    "raw", new TextEncoder().encode(secreto),
+    { name: "HMAC", hash: "SHA-256" }, false, ["sign"]
+  );
+  const firma = await crypto.subtle.sign("HMAC", clave, new TextEncoder().encode(cuerpo));
+  return [...new Uint8Array(firma)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+async function actualizarFirma(tarjeta) {
+  const span = tarjeta.querySelector(".firma");
+  const secreto = inputSecreto.value.trim();
+  const firma = tarjeta.dataset.firma;
+  if (!firma || !secreto) {
+    span.innerHTML = `<span class="veredicto">firma ${firma ? firma.slice(0, 22) + "…" : "— sin firma"} (pega el webhookSecret para validar)</span>`;
+    return;
+  }
+  const hex = firma.startsWith("sha256=") ? firma.slice(7) : firma;
+  const esperada = await hmac(tarjeta.dataset.cuerpo, secreto);
+  const valida = esperada === hex;
+  span.innerHTML = `<span class="veredicto ${valida ? "valida" : "invalida"}">firma ${valida ? "✓ VÁLIDA" : "✗ INVÁLIDA"} · ${hex.slice(0, 18)}…</span>`;
+}
+
+function pintar(entrega) {
+  const vacio = feed.querySelector(".vacio");
+  if (vacio) vacio.remove();
+
+  totales.total++;
+  entrega.tipo === "RECEPCION_OK" ? totales.ok++ : totales.fallo++;
+  contador.textContent = `total ${totales.total} · ok ${totales.ok} · fallo ${totales.fallo}`;
+
+  const tarjeta = document.createElement("div");
+  tarjeta.className = `tarjeta ${entrega.tipo === "RECEPCION_OK" ? "ok" : "fallo"}`;
+  tarjeta.dataset.firma = entrega.firma || "";
+  tarjeta.dataset.cuerpo = entrega.cuerpo || "";
+
+  let estadoChip = "";
+  let guia = "";
+  try {
+    const cuerpo = JSON.parse(entrega.cuerpo || "{}");
+    if (cuerpo.estado) estadoChip = `<span class="badge estado">${cuerpo.estado}</span>`;
+    if (cuerpo.guiaId) guia = ` · guía <code>${cuerpo.guiaId.slice(0, 8)}…</code>`;
+  } catch { /* cuerpo no JSON */ }
+
+  const hora = new Date(entrega.ts).toLocaleTimeString();
+  tarjeta.innerHTML = `
+    <div class="cabecera">
+      <span class="hora">#${entrega.n} · ${hora}</span>
+      <span class="badge ${entrega.tipo === "RECEPCION_OK" ? "ok" : "fallo"}">${entrega.tipo} · HTTP ${entrega.estadoHttp}</span>
+      <span class="badge estado">path: ${entrega.path}</span>
+      ${estadoChip}${guia}
+    </div>
+    <div class="firma"></div>
+    <pre>${(entrega.cuerpo || "").replace(/</g, "&lt;")}</pre>`;
+
+  feed.prepend(tarjeta);
+  actualizarFirma(tarjeta);
+}
+
+document.getElementById("limpiar").addEventListener("click", () => {
+  feed.querySelectorAll(".tarjeta").forEach(t => t.remove());
+  if (!feed.querySelector(".vacio")) {
+    feed.innerHTML = '<div class="vacio">Vista limpia — las nuevas entregas aparecerán aquí.</div>';
+  }
+});
+
+function conectar() {
+  const fuente = new EventSource("/eventos");
+  fuente.onopen = () => {
+    punto.className = "punto vivo";
+    conexion.textContent = "en vivo";
+  };
+  fuente.onerror = () => {
+    punto.className = "punto muerto";
+    conexion.textContent = "reconectando…";
+  };
+  fuente.onmessage = (e) => pintar(JSON.parse(e.data));
+}
+
+fetch("/entregas").then(r => r.json()).then(d => {
+  [...(d.entregas || [])].reverse().forEach(pintar);
+}).finally(conectar);
+</script>
+</body>
+</html>

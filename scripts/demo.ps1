@@ -65,4 +65,4 @@ docker compose logs webhook-mock --tail 40 --no-log-prefix 2>$null | Select-Stri
 Write-Host "=== 9. entregas OK vistas por el webhook-mock (incluida firma HMAC) ===" -ForegroundColor Cyan
 docker compose logs webhook-mock --no-log-prefix 2>$null | Select-String "RECEPCION_OK" | Measure-Object | ForEach-Object { "RECEPCION_OK detectados: $($_.Count)" }
 
-Write-Host "`nDemo completa. OpenAPI: http://localhost:3000/openapi.json" -ForegroundColor Green
+Write-Host "`nDemo completa. Abre también: http://localhost:9000 (vista web de los webhooks, con validación de firma pegando el webhookSecret) · http://localhost:3001 (dashboard Grafana) · http://localhost:3000/docs (Swagger UI)" -ForegroundColor Green

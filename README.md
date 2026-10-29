@@ -178,11 +178,24 @@ Comando único: `npm test` (unitarias + integración contra PostgreSQL real vía
   el valor observacional que el sistema necesita (la trazabilidad fina por operación ya la dan
   los logs JSON estructurados con `eventId`/`tenantId`).
 
-## Qué hace el webhook de prueba
+## El webhook de prueba tiene vista web
+
+Abre **http://localhost:9000** y observa las entregas **en vivo** (Server-Sent Events),
+sin consola:
+
+- Cada notificación aparece como tarjeta con: número, hora, `RECEPCION_OK`/`FALLO_INTENCIONAL`,
+  código HTTP, path, chip del estado de la guía y el body crudo pretty-printed.
+- Pega el `webhookSecret` (el que devuelve `PUT /v1/webhook`) en el campo de la cabecera y cada
+  tarjeta mostrará **✓ VÁLIDA / ✗ INVÁLIDA** para la firma `X-Signature` — la verificación HMAC
+  que haría el sistema real del cliente, calculada en el navegador (Web Crypto, el secreto no
+  sale de tu máquina).
+- Contadores vivos (total / ok / fallo) e indicador de conexión; botón "Limpiar vista".
+- La consola sigue logueando igual (`docker compose logs -f webhook-mock`) y la ruta `/fail`
+  sigue fallando para demostrar reintentos.
 
 ```text
-webhook-mock (compose) → imprime JSON por línea con: n° de entrega, path, X-Signature
-                         recibida y body crudo. Ruta /fail siempre falla (para ver reintentos).
+webhook-mock (compose) → GET /  (vista) · GET /eventos (SSE) · GET /entregas (historial)
+                         POST *  → registra la entrega, responde 200 (o 500 en /fail)
 ```
 
 ## Pruebas
