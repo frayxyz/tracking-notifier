@@ -35,6 +35,14 @@ function comando(overrides: Partial<Parameters<RegistrarEventoDeEstadoUseCase["e
   };
 }
 
+async function capturarError(fn: () => Promise<unknown>): Promise<unknown> {
+  try {
+    return await fn();
+  } catch (err) {
+    return err;
+  }
+}
+
 describe("RegistrarEventoDeEstadoUseCase", () => {
   it("primer evento: ACEPTADO, persiste evento y crea su notificación PENDING", async () => {
     const { casoDeUso, eventos, notificaciones } = caso();
@@ -42,7 +50,7 @@ describe("RegistrarEventoDeEstadoUseCase", () => {
 
     expect(resultado.estado).toBe("ACEPTADO");
     expect(eventos.cantidad()).toBe(1);
-    const notificacion = await notificaciones.porEventoId(resultado.eventoId);
+    const notificacion = await notificaciones.porEventoId(TENANT_A, resultado.eventoId);
     expect(notificacion?.estado).toBe("PENDING");
   });
 
@@ -63,9 +71,9 @@ describe("RegistrarEventoDeEstadoUseCase", () => {
     const { casoDeUso, eventos, notificaciones } = caso();
     await casoDeUso.ejecutar(comando({ eventId: "11119999-cccc-4b2b-8ccc-dddddddddddd", estado: "ENTREGADA" }));
 
-    const fallo = await casoDeUso
-      .ejecutar(comando({ eventId: "11119999-dddd-4b2b-8ccc-dddddddddddd", estado: "EN_RUTA" }))
-      .catch((e) => e as ErrorNegocio);
+    const fallo = (await capturarError(() =>
+      casoDeUso.ejecutar(comando({ eventId: "11119999-dddd-4b2b-8ccc-dddddddddddd", estado: "EN_RUTA" })),
+    ) as ErrorNegocio) ?? null;
 
     expect(fallo).toBeInstanceOf(ErrorNegocio);
     expect(fallo.codigo).toBe("INVALID_TRANSITION");
@@ -90,7 +98,7 @@ describe("RegistrarEventoDeEstadoUseCase", () => {
     const resultado = await casoDeUso.ejecutar(
       comando({ estado: "EN_RUTA", observacion: "escaneo en xalapa" }),
     );
-    const noti = await notificaciones.porEventoId(resultado.eventoId);
+    const noti = await notificaciones.porEventoId(TENANT_A, resultado.eventoId);
 
     expect(noti?.payload).toEqual({
       eventId: "11119999-aaaa-4b2b-8ccc-dddddddddddd",
@@ -103,9 +111,9 @@ describe("RegistrarEventoDeEstadoUseCase", () => {
 
   it("estado de negocio desconocido: error de dominio 400", async () => {
     const { casoDeUso } = caso();
-    const fallo = await casoDeUso
-      .ejecutar(comando({ eventId: "11119999-ffff-4b2b-8ccc-dddddddddddd", estado: "VOLADA" }))
-      .catch((e) => e as ErrorNegocio);
+    const fallo = (await capturarError(() =>
+      casoDeUso.ejecutar(comando({ eventId: "11119999-ffff-4b2b-8ccc-dddddddddddd", estado: "VOLADA" })),
+    ) as ErrorNegocio) ?? null;
 
     expect(fallo).toBeInstanceOf(ErrorNegocio);
     expect(fallo.codigo).toBe("INVALID_STATUS");

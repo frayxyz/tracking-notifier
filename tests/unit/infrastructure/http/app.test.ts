@@ -1,20 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { createApp } from "../../../../src/infrastructure/http/app.js";
-import { createLoggerStub } from "../../../support/logger-stub.js";
 import request from "supertest";
+import { construirAppDePrueba } from "../../../support/app-de-prueba.js";
 
-describe("healthz", () => {
-  it("responde 200 con estado ok", async () => {
-    const app = createApp(createLoggerStub());
+describe("app base HTTP", () => {
+  it("healthz responde 200 ok", async () => {
+    const { app } = construirAppDePrueba();
     const res = await request(app).get("/healthz");
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ status: "ok" });
   });
-});
 
-describe("formato de error único", () => {
-  it("ruta inexistente responde 404 con { error: { code, message, details } }", async () => {
-    const app = createApp(createLoggerStub());
+  it("ruta inexistente: 404 con formato de error único", async () => {
+    const { app } = construirAppDePrueba();
     const res = await request(app).get("/inexistente");
     expect(res.status).toBe(404);
     expect(res.body).toEqual({
@@ -22,10 +19,10 @@ describe("formato de error único", () => {
     });
   });
 
-  it("body JSON inválido responde 400 INVALID_BODY", async () => {
-    const app = createApp(createLoggerStub());
+  it("body JSON inválido: 400 INVALID_BODY", async () => {
+    const { app } = construirAppDePrueba();
     const res = await request(app)
-      .post("/loquesea")
+      .post("/v1/events")
       .set("Content-Type", "application/json")
       .send("{malformado");
     expect(res.status).toBe(400);

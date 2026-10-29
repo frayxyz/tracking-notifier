@@ -1,16 +1,12 @@
-import express, { Express, NextFunction, Request, Response } from "express";
+import express, { Express, NextFunction, Request, Response, Router } from "express";
 import type { Logger } from "../../config/logger.js";
 import { ErrorNegocio } from "../../domain/errors.js";
+import type { DependenciasHttp } from "./dependencias.js";
+import { middlewareDeTenant } from "./middleware/tenant.middleware.js";
+import { construirError } from "./error-body.js";
+import { montarRutas } from "./rutas.js";
 
-export interface ErrorBody {
-  error: { code: string; message: string; details: unknown[] };
-}
-
-function errorResponse(code: string, message: string, details: unknown[] = []): ErrorBody {
-  return { error: { code, message, details } };
-}
-
-export function createApp(logger: Logger): Express {
+export function createApp(logger: Logger, deps: DependenciasHttp): Express {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "256kb" }));
@@ -19,8 +15,15 @@ export function createApp(logger: Logger): Express {
     res.status(200).json({ status: "ok" });
   });
 
-  app.use((_req: Request, res: Response) => {
-    res.status(404).json(errorResponse("NOT_FOUND", "Route not found"));
+  const rutas = Router();
+  rutas.use(middlewareDeTenant);
+  montarRutas(rutas, deps);
+
+  app.use("/v1", rutas);
+
+  app.use((req, res) => {
+    res.status(404).json(construirError("NOT_FOUND", "Route not found"));
+    void req;
   });
 
   app.use(errorHandler(logger));
@@ -28,23 +31,19 @@ export function createApp(logger: Logger): Express {
 }
 
 function errorHandler(logger: Logger) {
-  return (err: unknown, _req: Request, _res: Response, _next: NextFunction): void => {
+  return (err: unknown, _req: Request, res: Response, _next: NextFunction): void => {
     if (err instanceof ErrorNegocio) {
-      _res
+      res
         .status(err.httpStatus)
-        .json(errorResponse(err.codigo, err.message, err.detalles));
+        .json(construirError(err.codigo, err.message, err.detalles));
       return;
     }
     if (esErrorDeBodyJson(err)) {
-      _res
-        .status(400)
-        .json(errorResponse("INVALID_BODY", "Request body must be valid JSON"));
+      res.status(400).json(construirError("INVALID_BODY", "Request body must be valid JSON"));
       return;
     }
     logInternal(logger, err);
-    _res
-      .status(500)
-      .json(errorResponse("INTERNAL_ERROR", "Unexpected internal error"));
+    res.status(500).json(construirError("INTERNAL_ERROR", "Unexpected internal error"));
   };
 }
 
