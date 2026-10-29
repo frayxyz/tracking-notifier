@@ -44,6 +44,18 @@ npm run dev            # API + worker en modo watch
 
 ## Cómo probarlo (guion de demostración)
 
+### En un solo comando (requiere compose corriendo)
+
+```bash
+powershell -ExecutionPolicy Bypass -File scripts\demo.ps1
+```
+
+Recorre toda la historia observable: healthz → configuración del webhook → `201 ACEPTADO` /
+`200 DUPLICADO` → `409` transición terminal → historial → ciclo `/fail` con backoff →
+`FAILED` consultable → conteo de entregas en los logs del mock.
+
+### Paso a paso con curl
+
 ```bash
 # 1. Configura el webhook del tenant (simulado: el Gateway ya validó el tenant)
 curl -X PUT http://localhost:3000/v1/webhook \
