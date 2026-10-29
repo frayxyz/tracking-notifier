@@ -1,0 +1,40 @@
+{
+  "name": "tracking-notifier",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Microservicio de tracking multi-tenant: registra cambios de estado de guias y notifica via webhook con reintentos (arquitectura hexagonal).",
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "test": "cross-env OPENSSL_ia32cap=~0x20000000 vitest run",
+    "test:unit": "cross-env OPENSSL_ia32cap=~0x20000000 vitest run tests/unit",
+    "test:integration": "cross-env OPENSSL_ia32cap=~0x20000000 vitest run tests/integration",
+    "db:generate": "cross-env OPENSSL_ia32cap=~0x20000000 drizzle-kit generate",
+    "db:migrate": "cross-env OPENSSL_ia32cap=~0x20000000 tsx src/infrastructure/persistence/migrate.ts"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.36.4",
+    "express": "^4.21.2",
+    "pg": "^8.13.1",
+    "pino": "^9.5.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^22.10.2",
+    "@types/pg": "^8.11.10",
+    "@types/supertest": "^6.0.2",
+    "cross-env": "^10.1.0",
+    "drizzle-kit": "^0.28.1",
+    "supertest": "^7.0.0",
+    "testcontainers": "^10.16.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
