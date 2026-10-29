@@ -16,6 +16,7 @@ import type { DependenciasHttp } from "./infrastructure/http/dependencias.js";
 import { HttpWebhookDispatcher } from "./infrastructure/webhooks/HttpWebhookDispatcher.js";
 import { DespacharNotificacionesPendientesUseCase } from "./application/use-cases/DespacharNotificacionesPendientesUseCase.js";
 import { CicloDelWorker } from "./infrastructure/worker/CicloDelWorker.js";
+import { MetricasDelServicio } from "./infrastructure/observability/metrics.js";
 
 const RelojSistema: Reloj = {
   ahora(): Date {
@@ -36,10 +37,12 @@ export interface Container {
   dependenciasHttp: DependenciasHttp;
   proveedor: ProveedorDeBaseDeDatos;
   worker: CicloDelWorker;
+  metricas: MetricasDelServicio;
 }
 
 export async function construirContainer(env: Env): Promise<Container> {
   const logger: Logger = createLogger(env);
+  const metricas = new MetricasDelServicio();
 
   const proveedor = new ProveedorDeBaseDeDatos(env.DATABASE_URL, env.DATABASE_SSL);
   await migrar(proveedor.obtener());
@@ -76,14 +79,15 @@ export async function construirContainer(env: Env): Promise<Container> {
       backoffBaseMs: env.BACKOFF_BASE_MS,
     },
   );
-  const worker = new CicloDelWorker(casoDespacho, env.WORKER_INTERVAL_MS, logger);
+  const worker = new CicloDelWorker(casoDespacho, env.WORKER_INTERVAL_MS, logger, metricas);
 
   return {
     env,
     logger,
-    app: createApp(logger, dependenciasHttp),
+    app: createApp(logger, dependenciasHttp, metricas),
     dependenciasHttp,
     proveedor,
     worker,
+    metricas,
   };
 }

@@ -7,15 +7,35 @@ import swaggerUi from "swagger-ui-express";
 import { construirError } from "./error-body.js";
 import { montarRutas } from "./rutas.js";
 import { construirOpenApiDocument } from "./openapi/construir-documento.js";
+import type { MetricasDelServicio } from "../observability/metrics.js";
 
-export function createApp(logger: Logger, deps: DependenciasHttp): Express {
+export function createApp(logger: Logger, deps: DependenciasHttp, metricas?: MetricasDelServicio): Express {
   const app = express();
   app.disable("x-powered-by");
   app.use(express.json({ limit: "256kb" }));
 
+  if (metricas) {
+    app.use((req, res, next) => {
+      res.on("finish", () => {
+        metricas.peticionesHttp.inc({
+          method: req.method,
+          route: req.route?.path ?? req.path,
+          status: res.statusCode,
+        });
+      });
+      next();
+    });
+  }
+
   app.get("/healthz", (_req: Request, res: Response) => {
     res.status(200).json({ status: "ok" });
   });
+
+  if (metricas) {
+    app.get("/metrics", async (_req: Request, res: Response) => {
+      res.status(200).type("text/plain").send(await metricas.render());
+    });
+  }
 
   app.get("/openapi.json", (_req: Request, res: Response) => {
     res.status(200).json(construirOpenApiDocument());
