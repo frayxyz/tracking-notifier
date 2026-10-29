@@ -214,4 +214,87 @@ describe("RegistrarEventoDeEstadoUseCase", () => {
     expect(eventos.cantidad()).toBe(1);
     expect(notificaciones.cantidad()).toBe(1);
   });
+
+  it("tardío coherente: ACEPTADO como inserción histórica, estadoActual estable, y SÍ notifica", async () => {
+    const { casoDeUso, eventos, notificaciones } = caso();
+    await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-0909-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-02T10:00:00.000Z",
+        observacion: "escaneo en cedi",
+      }),
+    );
+
+    const tardio = await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-1010-4b2b-8ccc-dddddddddddd",
+        estado: "CREADA",
+        fechaEvento: "2026-01-01T08:00:00.000Z",
+        observacion: "llegada tardía desde el upstream",
+      }),
+    );
+
+    expect(tardio.estado).toBe("ACEPTADO");
+    expect(tardio.estadoActual).toBe("EN_RUTA");
+    expect(eventos.cantidad()).toBe(2);
+    expect(notificaciones.cantidad()).toBe(2);
+    const notiTardia = await notificaciones.porEventoId(TENANT_A, "11119999-1010-4b2b-8ccc-dddddddddddd");
+    expect(notiTardia?.estado).toBe("PENDING");
+    expect(notiTardia?.payload.fechaEvento).toBe("2026-01-01T08:00:00.000Z");
+  });
+
+  it("tardío incoherente (ENTREGADA antes de EN_RUTA): 409 sin persistir ni notificar", async () => {
+    const { casoDeUso, eventos, notificaciones } = caso();
+    await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-1111-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-02T10:00:00.000Z",
+      }),
+    );
+
+    const fallo = (await capturarError(() =>
+      casoDeUso.ejecutar(
+        comando({
+          eventId: "11119999-1212-4b2b-8ccc-dddddddddddd",
+          estado: "ENTREGADA",
+          fechaEvento: "2026-01-01T08:00:00.000Z",
+        }),
+      ),
+    ) as ErrorNegocio) ?? null;
+
+    expect(fallo).toBeInstanceOf(ErrorNegocio);
+    expect(fallo.codigo).toBe("INVALID_TRANSITION");
+    expect(fallo.httpStatus).toBe(409);
+    expect(eventos.cantidad()).toBe(1);
+    expect(notificaciones.cantidad()).toBe(1);
+  });
+
+  it("tardío bajo estado terminal: 409 sin persistir ni notificar", async () => {
+    const { casoDeUso, eventos, notificaciones } = caso();
+    await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-1313-4b2b-8ccc-dddddddddddd",
+        estado: "ENTREGADA",
+        fechaEvento: "2026-01-03T10:00:00.000Z",
+      }),
+    );
+
+    const fallo = (await capturarError(() =>
+      casoDeUso.ejecutar(
+        comando({
+          eventId: "11119999-1414-4b2b-8ccc-dddddddddddd",
+          estado: "CREADA",
+          fechaEvento: "2026-01-01T08:00:00.000Z",
+        }),
+      ),
+    ) as ErrorNegocio) ?? null;
+
+    expect(fallo).toBeInstanceOf(ErrorNegocio);
+    expect(fallo.codigo).toBe("INVALID_TRANSITION");
+    expect(fallo.httpStatus).toBe(409);
+    expect(eventos.cantidad()).toBe(1);
+    expect(notificaciones.cantidad()).toBe(1);
+  });
 });

@@ -63,7 +63,14 @@ export class RegistrarEventoDeEstadoUseCase {
       await this.notificacionRepository.guardar(Notificacion.registrada(evento, evento.fechaRegistro));
     });
 
-    return resultado("ACEPTADO", evento);
+    const estadoActualFinal = guia.estadoActual()?.valor ?? evento.estado.valor;
+    return {
+      estado: "ACEPTADO",
+      eventoId: evento.eventId,
+      guiaId: evento.guiaId,
+      estadoActual: estadoActualFinal,
+      resourceId: evento.eventId,
+    };
   }
 }
 
