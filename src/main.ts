@@ -4,7 +4,7 @@ import { iniciarTracing, detenerTracing } from "./infrastructure/observability/t
 
 async function main(): Promise<void> {
   const env = loadEnv();
-  const sdk = iniciarTracing({ activo: env.OTEL_ENABLED, endpointOtlp: env.OTEL_EXPORTER_OTLP_ENDPOINT });
+  const sdk = iniciarTracing({ activo: env.OTEL_ENABLED, urlZipkin: env.OTEL_EXPORTER_URL });
   const container = await construirContainer(env);
 
   const server = container.app.listen(env.PORT, () => {

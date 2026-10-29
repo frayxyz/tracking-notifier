@@ -1,4 +1,5 @@
 import { createHmac } from "node:crypto";
+import { trace } from "@opentelemetry/api";
 import type {
   DespachadorDeWebhook,
   ResultadoDespacho,
@@ -21,27 +22,37 @@ export class HttpWebhookDispatcher implements DespachadorDeWebhook {
     secret: string,
   ): Promise<ResultadoDespacho> {
     const cuerpo = JSON.stringify(payload);
-    try {
-      const respuesta = await fetch(url, {
-        method: "POST",
-        headers: construirEncabezados(cuerpo, secret, this.config),
-        body: cuerpo,
-        signal: AbortSignal.timeout(this.config.timeoutMs),
-      });
-      if (respuesta.ok) {
-        return { exito: true, httpStatus: respuesta.status };
+    const tracer = trace.getTracer("tracking-notifier/webhooks");
+    return tracer.startActiveSpan("webhook.despachar", async (span) => {
+      span.setAttribute("webhook.url", url);
+      span.setAttribute("webhook.eventoId", payload.eventId);
+      try {
+        const respuesta = await fetch(url, {
+          method: "POST",
+          headers: construirEncabezados(cuerpo, secret, this.config),
+          body: cuerpo,
+          signal: AbortSignal.timeout(this.config.timeoutMs),
+        });
+        span.setAttribute("webhook.httpStatus", respuesta.status);
+        if (respuesta.ok) {
+          span.setStatus({ code: 1 });
+          return { exito: true, httpStatus: respuesta.status };
+        }
+        span.setStatus({ code: 2, message: `HTTP ${respuesta.status}` });
+        return {
+          exito: false,
+          httpStatus: respuesta.status,
+          error: `Respuesta HTTP ${respuesta.status} del webhook`,
+        };
+      } catch (err) {
+        const mensaje = err instanceof Error ? describeFallo(err) : String(err);
+        span.setStatus({ code: 2, message: mensaje });
+        span.recordException(err instanceof Error ? err : String(err));
+        return { exito: false, error: mensaje };
+      } finally {
+        span.end();
       }
-      return {
-        exito: false,
-        httpStatus: respuesta.status,
-        error: `Respuesta HTTP ${respuesta.status} del webhook`,
-      };
-    } catch (err) {
-      return {
-        exito: false,
-        error: err instanceof Error ? describeFallo(err) : String(err),
-      };
-    }
+    });
   }
 }
 

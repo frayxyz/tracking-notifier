@@ -28,7 +28,7 @@ const EnvSchema = z.object({
     .enum(["true", "false"])
     .default("false")
     .transform((v) => v === "true"),
-  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().default("http://localhost:4318"),
+  OTEL_EXPORTER_URL: z.string().default("http://localhost:9411/api/v2/spans"),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

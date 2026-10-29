@@ -17,13 +17,15 @@ services:
       retries: 12
 
   jaeger:
-    image: jaegertracing/all-in-one:1.62
+    image: jaegertracing/all-in-one:1.62.0
     restart: unless-stopped
     environment:
       COLLECTOR_OTLP_ENABLED: "true"
+      COLLECTOR_ZIPKIN_HOST_PORT: ":9411"
     ports:
       - "16686:16686"
       - "4318:4318"
+      - "9411:9411"
 
   webhook-mock:
     build: ./webhook-mock
@@ -51,7 +53,7 @@ services:
       BACKOFF_BASE_MS: "1000"
       WEBHOOK_HMAC_ENABLED: "true"
       OTEL_ENABLED: "true"
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4318
+      OTEL_EXPORTER_URL: http://jaeger:9411/api/v2/spans
     ports:
       - "3000:3000"
 

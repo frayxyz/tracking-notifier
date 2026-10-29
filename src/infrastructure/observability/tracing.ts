@@ -2,20 +2,18 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
 import { PgInstrumentation } from "@opentelemetry/instrumentation-pg";
-import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { ZipkinExporter } from "@opentelemetry/exporter-zipkin";
 
 export interface ConfiguracionTracing {
   activo: boolean;
-  endpointOtlp: string;
+  urlZipkin: string;
 }
 
 export function iniciarTracing(config: ConfiguracionTracing): NodeSDK | null {
   if (!config.activo) return null;
   const sdk = new NodeSDK({
     serviceName: "tracking-notifier",
-    traceExporter: new OTLPTraceExporter({
-      url: `${config.endpointOtlp}/v1/traces`,
-    }),
+    traceExporter: new ZipkinExporter({ url: config.urlZipkin }),
     instrumentations: [
       new HttpInstrumentation(),
       new ExpressInstrumentation(),
