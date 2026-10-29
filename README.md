@@ -29,8 +29,9 @@ Desarrollador Backend Senior.
 | Validación | Zod (también alimenta la spec OpenAPI) |
 | Base de datos | PostgreSQL 16 · Drizzle ORM (SQL explícito, migraciones) |
 | Logs | Pino (JSON estructurado, sin datos personales) |
-| Pruebas | Vitest + Supertest · Integración con PostgreSQL real via testcontainers |
-| Ci | GitHub Actions (`npm test` en cada push) |
+| Pruebas | Vitest + Supertest · Integración con PostgreSQL real vía testcontainers |
+| Observabilidad | Prometheus + Grafana (dashboard pre-cargado con métricas de negocio) |
+| CI | GitHub Actions (`npm test` en cada push) |
 
 ## Cómo correrlo
 
@@ -40,9 +41,26 @@ Desarrollador Backend Senior.
 docker compose up
 ```
 
-Levanta: API (`:3000`), PostgreSQL (`:5432`) y un **webhook de prueba** (`:9000`) que imprime en
-logs todo lo que recibe (JSON por línea). La ruta host `/fail` falla intencionalmente para poder
-observar los reintentos y las notificaciones `FAILED`.
+Levanta 5 servicios:
+
+| Servicio | Qué hace |
+|---|---|
+| `api` (:3000) | El microservicio (API + worker del outbox) |
+| `db` (:5432) | PostgreSQL 16 con migraciones automáticas al arranque |
+| `webhook-mock` (:9000) | Webhook de prueba con **vista web en vivo** de las entregas; `/fail` falla intencionalmente para demostrar reintentos |
+| `prometheus` (:9090) | Almacena y consulta las métricas que la API expone en `/metrics` |
+| `grafana` (:3001) | Dashboard visual de métricas de negocio, pre-cargado |
+
+**Accesos rápidos una vez arriba el compose**:
+
+| URL | Qué es |
+|---|---|
+| http://localhost:3000/docs | Swagger UI (ejecuta la API desde el navegador) |
+| http://localhost:9000 | Vista en vivo de los webhooks entregados |
+| http://localhost:3001 | Dashboard Grafana (admin/admin) |
+| http://localhost:3000/openapi.json | Especificación OpenAPI |
+| http://localhost:3000/metrics | Métricas Prometheus crudas |
+| http://localhost:3000/healthz | Health check |
 
 ### Local (desarrollo)
 
@@ -96,8 +114,8 @@ curl -X POST http://localhost:3000/v1/events \
 curl http://localhost:3000/v1/guides/<guiaId> \
   -H "X-Tenant-Id: 11111111-1111-1111-1111-111111111111"
 
-# 5. Conoce al webhook en acción (logs del contenedor)
-docker compose logs -f webhook-mock
+# 5. Observa las entregas en vivo: abre http://localhost:9000 en el navegador
+#    (o en consola: docker compose logs -f webhook-mock)
 
 # 6. Demuestra el ciclo de reintentos: configura el webhook hacia la ruta que falla
 curl -X PUT http://localhost:3000/v1/webhook \
@@ -128,7 +146,7 @@ mediante el botón *Authorize*, tipo *apiKey*).
 | `GET` | `/v1/guides/:guiaId` | Historial cronológico + estado actual (aislamiento por tenant) |
 | `PUT` | `/v1/webhook` | Configura/rota la URL del webhook del tenant |
 | `GET` | `/v1/notifications` | Consulta del outbox (`?status=PENDING|DELIVERED|FAILED`) |
-| `GET` | `/metrics` | Metricas Prometheus: `http_requests_total`, `notificaciones_entregadas_total`, `notificaciones_fallidas_total`, `webhook_attempts_total{resultado}` |
+| `GET` | `/metrics` | Métricas Prometheus de negocio: `tracking_eventos_*`, `tracking_notificaciones_*`, `tracking_webhook_*`, `http_requests_total` |
 | `GET` | `/docs` | Swagger UI interactivo (consume `/openapi.json`) |
 | `GET` | `/openapi.json` | Especificación OpenAPI |
 | `GET` | `/healthz` | Health check |
@@ -155,7 +173,7 @@ INVALID_BODY`, `404 GUIDE_NOT_FOUND · NOT_FOUND`, `409 INVALID_TRANSITION`, `50
 
 Comando único: `npm test` (unitarias + integración contra PostgreSQL real vía testcontainers).
 
-## Observabilidad (trazas y métricas)
+## Observabilidad (métricas)
 
 - **Métricas visuales (Prometheus + Grafana)** — con `docker compose up` quedan disponibles:
 
@@ -189,7 +207,7 @@ Comando único: `npm test` (unitarias + integración contra PostgreSQL real vía
   el valor observacional que el sistema necesita (la trazabilidad fina por operación ya la dan
   los logs JSON estructurados con `eventId`/`tenantId`).
 
-## El webhook de prueba tiene vista web
+## El webhook de prueba tiene vista web (http://localhost:9000)
 
 Abre **http://localhost:9000** y observa las entregas **en vivo** (Server-Sent Events),
 sin consola:
@@ -214,7 +232,7 @@ webhook-mock (compose) → GET /  (vista) · GET /eventos (SSE) · GET /entregas
 ```bash
 npm test          # todo (unitarias + integración) en un solo comando
 npm run test:unit         # solo unitarias (no requieren Docker)
-npm run test:integration  # solo integración (PostgreSQL real via testcontainers)
+npm run test:integration  # solo integración (PostgreSQL real vía testcontainers)
 ```
 
 Qué se prueba y por qué:
@@ -303,17 +321,17 @@ todo al arranque (inyección explícita, sin contenedor mágico).
 6. **Estado actual de la guía** — es el del evento con `fechaEvento` más reciente
    (desempate por `fechaRegistro`), coherente con el historial cronológico. Fijado en el
    agregado: "vigente" tiene una única definición en el dominio.
-6. **Tenant** — `X-Tenant-Id` se confía (simulado por Gateway); el servicio verifica formato UUID,
+7. **Tenant** — `X-Tenant-Id` se confía (simulado por Gateway); el servicio verifica formato UUID,
    no existencia. El tenant nace a la hora de configurar su webhook; toda lectura/escritura filtra
    por tenant y las `UNIQUE` están por `(tenant_id, …)`.
-7. **Notificaciones de tenants sin webhook** — se marcan `FAILED` con error descriptivo y quedan
+8. **Notificaciones de tenants sin webhook** — se marcan `FAILED` con error descriptivo y quedan
    consultables (es el comportamiento con menos esquinas y más observabilidad).
-8. **Secretos** — exclusivamente por variables de entorno (validadas con Zod al arrancar:
+9. **Secretos** — exclusivamente por variables de entorno (validadas con Zod al arrancar:
    *fail-fast*). Nada sensible en el repo; `.env.example` documenta el contrato. Credenciales de
    compose son ficticias (solo demo).
-9. **Logs** — JSON por línea (Pino) con `redact` de cabeceras sensibles; se registran
-   identificadores (`tenantId`, `eventId`) y resultados, **nunca** cargas útiles ni `observacion`
-   (candidato real a contener datos personales).
+10. **Logs** — JSON por línea (Pino) con `redact` de cabeceras sensibles; se registran
+    identificadores (`tenantId`, `eventId`) y resultados, **nunca** cargas útiles ni `observacion`
+    (candidato real a contener datos personales).
 
 ## Herramientas de IA utilizadas
 
@@ -330,8 +348,8 @@ todo al arranque (inyección explícita, sin contenedor mágico).
 
 - **`LISTEN/NOTIFY`** del outbox para entrega casi-inmediata sin sacrificar durabilidad
   (polling mantiene su rol de red de seguridad).
-- **Métricas/OpenTelemetry**: contador de ciclos del worker, histograma de intentos,
-  trazas propagadas por `eventId`.
+- **Trazas distribuidas (OpenTelemetry)** propagadas por `eventId` — la pieza de observabilidad
+  pendiente: hoy la trazabilidad fina por operación la dan los logs JSON estructurados.
 - **Rate limiting y desduplicación** adicional por tenant en el dispatcher, y circuit breaker
   si un webhook se cae prolongadamente (aplicar un retraso mayor a `next_attempt_at`).
 - **Paginación por cursor** en `/v1/notifications` (offset basta para el alcance actual).
