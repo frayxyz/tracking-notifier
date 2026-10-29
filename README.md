@@ -319,10 +319,11 @@ todo al arranque (inyección explícita, sin contenedor mágico).
 
 ## Herramientas de IA utilizadas
 
-- **Asistente de codificación (Claude/GPT) para andamiaje acelerado**: estructura del proyecto,
-  configuración TypeScript, esqueleto Express/Drizzle, y redacción de los primeros tests para
-  bootstrapping por TDD. El **diseño** (máquina de estados, outbox, contratos HTTP) y las
-  decisiones del ADR son de análisis manual con el dominio del enunciado.
+- **Asistente de codificación (GLM 5.3 Flash, vía opencode CLI) para andamiaje acelerado**:
+  estructura del proyecto, configuración TypeScript, esqueleto Express/Drizzle, y redacción de
+  los primeros tests para bootstrapping por TDD. El **diseño** (máquina de estados, outbox,
+  contratos HTTP) y las decisiones del ADR salieron del análisis del enunciado y de las
+  preguntas de negocio convalidadas con el emisor del reto.
 - **Depuración incrementada**: el asistente ayudó a identificar el error de entorno OpenSSL de
   npm en Windows (workaround documentado en scripts) y a corregir detalles de tipado estricto.
 - Todo el código final fue revisado, ejecutado y testeado localmente; las pruebas
