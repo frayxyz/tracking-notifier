@@ -1,4 +1,5 @@
 FROM node:22-alpine AS builder
+ENV OPENSSL_ia32cap=~0x20000000
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --ignore-scripts
@@ -9,11 +10,12 @@ COPY tests ./tests
 RUN npx tsc -p tsconfig.json
 
 FROM node:22-alpine
-WORKDIR /app
 ENV NODE_ENV=production
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+ENV OPENSSL_ia32cap=~0x20000000
+WORKDIR /app
+COPY --from=builder /app/package.json /app/package-lock.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
-COPY src/infrastructure/persistence/migrations ./dist/infrastructure/persistence/migrations
+COPY src/infrastructure/persistence/migrations ./dist/src/infrastructure/persistence/migrations
 EXPOSE 3000
 ENTRYPOINT ["node", "dist/src/main.js"]

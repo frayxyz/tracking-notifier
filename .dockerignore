@@ -4,5 +4,4 @@ coverage
 .env
 .env.*
 docs
-tests
 .git
