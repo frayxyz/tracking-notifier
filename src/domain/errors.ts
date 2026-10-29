@@ -31,3 +31,13 @@ export class TenantNoValido extends ErrorNegocio {
     super("INVALID_TENANT", 400, "Missing or invalid 'X-Tenant-Id' header");
   }
 }
+
+export class UrlWebhookInvalida extends ErrorNegocio {
+  constructor(url: string) {
+    super(
+      "INVALID_WEBHOOK_URL",
+      400,
+      `Webhook URL not valid (http or https required): '${url}'`,
+    );
+  }
+}
