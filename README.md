@@ -132,6 +132,17 @@ mediante el botón *Authorize*, tipo *apiKey*).
 Códigos: `400 INVALID_PAYLOAD · INVALID_STATUS · INVALID_TENANT · INVALID_WEBHOOK_URL ·
 INVALID_BODY`, `404 GUIDE_NOT_FOUND · NOT_FOUND`, `409 INVALID_TRANSITION`, `500 INTERNAL_ERROR`.
 
+## Trazabilidad por requisito (cómo verificar cada uno)
+
+| Requisito | Verificación automatizada | Verificación en vivo |
+|---|---|---|
+| **RF1** Registrar evento (idempotencia, transiciones) | Unit: `EstadoGuia`, `Guia`, `RegistrarEventoDeEstadoUseCase` (68 casos: dedup por eventId, dedup por contenido, re-escaneo enriquecido, terminales, regresiones, tardíos) · HTTP: supertest `events-api` · Integración: doble inserción concurrente en Postgres real | `scripts/verificar-reglas.mjs` |
+| **RF2** Historial por guía (cronológico, aislado por tenant) | Unit: `ConsultarHistorialDeGuiaUseCase` (orden cronológico con repos desordenado, 404) · HTTP: `rutas-api` (404 cross-tenant) · Integración: aislamiento por tenant en Postgres real | demo.ps1 paso 5 |
+| **RF3** Configurar webhook | Unit: `ConfigurarWebhookUseCase` (guardar, rotar secreto, URL http/s) · HTTP: `PUT /v1/webhook` · Integración: upsert real en Postgres + independencia por tenant | demo.ps1 paso 2 |
+| **RF4** Notificar async (no bloquea, reintenta, FAILED consultable) | Unit: worker (entrega, backoff 1/2/4/8/16 s, 5 intentos→FAILED, sin webhook→FAILED) + dispatcher (HMAC-SHA256 verificado contra servidor real, 5xx, timeout) · **Integración e2e**: evento → notificación PENDING en BD real → worker → POST firmado verificado → `DELIVERED`; fallo ×5 → `FAILED` consultable vía listado; timeout; tenant sin webhook | demo.ps1 pasos 6–9 (`FALLO_INTENCIONAL ×5`, `RECEPCION_OK` con firma) |
+
+Comando único: `npm test` (unitarias + integración contra PostgreSQL real vía testcontainers).
+
 ## Pruebas
 
 ```bash
