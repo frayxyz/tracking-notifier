@@ -36,6 +36,10 @@ describe("EstadoGuia (máquina de estados del dominio)", () => {
     expect(enRuta.puedeTransicionarA(enRuta)).toBe(true);
   });
 
+  it("bloquea la regresión EN_RUTA → CREADA (no tiene sentido de negocio)", () => {
+    expect(EstadoGuia.desde("EN_RUTA").puedeTransicionarA(EstadoGuia.desde("CREADA"))).toBe(false);
+  });
+
   it("ENTREGADA es terminal: rechaza cualquier transición", () => {
     const entregada = EstadoGuia.desde("ENTREGADA");
     for (const destino of EstadoGuia.todos()) {

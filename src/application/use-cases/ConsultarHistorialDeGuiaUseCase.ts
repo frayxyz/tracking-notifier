@@ -1,4 +1,5 @@
 import type { EventoDeEstado } from "../../domain/guia/EventoDeEstado.js";
+import { ordenarEventosCronologicamente } from "../../domain/guia/orden-cronologico.js";
 import type { GuiaRepository } from "../../domain/ports/GuiaRepository.js";
 import { GuiaNoEncontrada } from "../../domain/errors.js";
 
@@ -28,8 +29,8 @@ export class ConsultarHistorialDeGuiaUseCase {
     if (eventos.length === 0) {
       throw new GuiaNoEncontrada(consulta.guiaId);
     }
-    const ordenados = ordenarCronologicamente(eventos);
-    const ultimo = ordenados[ordenados.length - 1]!;
+    const ordenados = ordenarEventosCronologicamente(eventos);
+    const ultimo = ordenados[ordenados.length - 1] as EventoDeEstado;
     return {
       guiaId: consulta.guiaId,
       estadoActual: ultimo.estado.valor,
@@ -41,12 +42,4 @@ export class ConsultarHistorialDeGuiaUseCase {
       })),
     };
   }
-}
-
-function ordenarCronologicamente(eventos: EventoDeEstado[]): EventoDeEstado[] {
-  return [...eventos].sort((a, b) => {
-    const diferencia = a.fechaEvento.getTime() - b.fechaEvento.getTime();
-    if (diferencia !== 0) return diferencia;
-    return a.fechaRegistro.getTime() - b.fechaRegistro.getTime();
-  });
 }

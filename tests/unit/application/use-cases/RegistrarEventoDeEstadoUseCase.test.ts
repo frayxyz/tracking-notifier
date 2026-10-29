@@ -119,4 +119,99 @@ describe("RegistrarEventoDeEstadoUseCase", () => {
     expect(fallo.codigo).toBe("INVALID_STATUS");
     expect(fallo.httpStatus).toBe(400);
   });
+
+  it("estado repetido con datos idénticos al vigente: DUPLICADO sin persistir ni notificar", async () => {
+    const { casoDeUso, eventos, notificaciones } = caso();
+    const primer = await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-0101-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T09:00:00.000Z",
+        observacion: "escaneo en cedi",
+      }),
+    );
+
+    const repetidoConOtroId = await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-0202-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T09:00:00.000Z",
+        observacion: "escaneo en cedi",
+      }),
+    );
+
+    expect(primer.estado).toBe("ACEPTADO");
+    expect(repetidoConOtroId.estado).toBe("DUPLICADO");
+    expect(eventos.cantidad()).toBe(1);
+    expect(notificaciones.cantidad()).toBe(1);
+  });
+
+  it("estado repetido con observación nueva: re-escaneo enriquecido ACEPTADO", async () => {
+    const { casoDeUso, eventos, notificaciones } = caso();
+    await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-0303-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T09:00:00.000Z",
+        observacion: "escaneo en cedi",
+      }),
+    );
+    const enriquecido = await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-0404-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T09:00:00.000Z",
+        observacion: "escaneo en cedi - llegada a hub",
+      }),
+    );
+
+    expect(enriquecido.estado).toBe("ACEPTADO");
+    expect(enriquecido.estadoActual).toBe("EN_RUTA");
+    expect(eventos.cantidad()).toBe(2);
+    expect(notificaciones.cantidad()).toBe(2);
+  });
+
+  it("estado repetido con fecha diferente: ACEPTADO (nuevo escaneo)", async () => {
+    const { casoDeUso, eventos, notificaciones } = caso();
+    await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-0505-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T09:00:00.000Z",
+        observacion: "escaneo en cedi",
+      }),
+    );
+    const nuevoEscaneo = await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-0606-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+        fechaEvento: "2026-01-01T14:00:00.000Z",
+        observacion: "escaneo en cedi",
+      }),
+    );
+
+    expect(nuevoEscaneo.estado).toBe("ACEPTADO");
+    expect(eventos.cantidad()).toBe(2);
+    expect(notificaciones.cantidad()).toBe(2);
+  });
+
+  it("regresión EN_RUTA → CREADA: 409 INVALID_TRANSITION sin persistir nada", async () => {
+    const { casoDeUso, eventos, notificaciones } = caso();
+    await casoDeUso.ejecutar(
+      comando({
+        eventId: "11119999-0707-4b2b-8ccc-dddddddddddd",
+        estado: "EN_RUTA",
+      }),
+    );
+
+    const fallo = (await capturarError(() =>
+      casoDeUso.ejecutar(comando({ eventId: "11119999-0808-4b2b-8ccc-dddddddddddd", estado: "CREADA" })),
+    ) as ErrorNegocio) ?? null;
+
+    expect(fallo).toBeInstanceOf(ErrorNegocio);
+    expect(fallo.codigo).toBe("INVALID_TRANSITION");
+    expect(fallo.httpStatus).toBe(409);
+    expect(eventos.cantidad()).toBe(1);
+    expect(notificaciones.cantidad()).toBe(1);
+  });
 });

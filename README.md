@@ -198,9 +198,19 @@ todo al arranque (inyección explícita, sin contenedor mágico).
    CONFLICT DO NOTHING`), no solo en código de aplicación: es la única manera de vencer la
    condición de carrera de doble envío. El caso de uso consulta primero y devuelve
    `DUPLICADO → 200` sin duplicar evento ni notificación.
-4. **Estados terminales** — `ENTREGADA` y `DEVUELTA` rechazan cualquier evento posterior (`409
-   INVALID_TRANSITION`), incluso con `eventId` distinto. Un mismo estado no terminal repetido
-   (re-escaneo) se acepta con un evento nuevo; el dedupe fuerte lo aporta el `eventId`.
+4. **Estados terminales y reglas de transición** — la máquina de estados actúa en dos niveles:
+   - **Terminales en absoluto**: `ENTREGADA` y `DEVUELTA` rechazan **cualquier evento nuevo** con
+     `409 INVALID_TRANSITION` (no cambian de estado, ni siquiera hacia sí mismas con datos nuevos).
+     La única respuesta posible es la repetición del **mismo eventId** ya registrado, que responde
+     `200 DUPLICADO` por idempotencia (no es un evento nuevo: no cambia nada).
+   - **Regresión bloqueada**: `EN_RUTA → CREADA` se rechaza con `409` (una guía no "vuelve a nacer").
+   - **Deduplicación por estado** (estados no terminales): un evento nuevo cuyo estado, `fechaEvento`
+     y `observacion` son **idénticos** al evento vigente se responde `200 DUPLICADO` sin persistir
+     nada (es la misma lectura reenviada con otro `eventId`).
+   - **Re-escaneo enriquecido**: mismo estado pero con `fechaEvento` u `observacion` distintas se
+     acepta (`201 ACEPTADO`) como lectura nueva + su notificación (fiel a "por cada evento aceptado
+     se notifica"). El estado solo se mueve hacia adelante; el dedup fuerte sigue garantizado por
+     `eventId`, y por estado+contenido para lecturas repetidas.
 5. **Estado actual de la guía** — es el del evento con `fechaEvento` más reciente
    (desempate por `fechaRegistro`), no el último recibido: refleja el significado de
    "historial cronológico" del enunciado. Los eventos que se reciben fuera de orden

@@ -1,5 +1,6 @@
 import { EstadoGuia } from "../../domain/guia/EstadoGuia.js";
 import type { EventoDeEstado } from "../../domain/guia/EventoDeEstado.js";
+import { ordenarEventosCronologicamente } from "../../domain/guia/orden-cronologico.js";
 import { Guia } from "../../domain/guia/Guia.js";
 import { Notificacion } from "../../domain/notificacion/Notificacion.js";
 import type { GuiaRepository } from "../../domain/ports/GuiaRepository.js";
@@ -42,6 +43,12 @@ export class RegistrarEventoDeEstadoUseCase {
       comando.tenantId,
       comando.guiaId,
     );
+    const vigente = eventoVigente(eventosPrevios);
+
+    if (vigente && esElMismoEscaneo(vigente, comando)) {
+      return resultado("DUPLICADO", vigente);
+    }
+
     const guia = Guia.reconstruir(comando.tenantId, comando.guiaId, eventosPrevios);
     const evento = guia.registrarEvento({
       eventId: comando.eventId,
@@ -68,4 +75,22 @@ function resultado(estado: "ACEPTADO" | "DUPLICADO", evento: EventoDeEstado): Re
     estadoActual: evento.estado.valor,
     resourceId: evento.eventId,
   };
+}
+
+function eventoVigente(eventos: EventoDeEstado[]): EventoDeEstado | null {
+  if (eventos.length === 0) return null;
+  const ordenados = ordenarEventosCronologicamente(eventos);
+  return ordenados[ordenados.length - 1] ?? null;
+}
+
+function esElMismoEscaneo(vigente: EventoDeEstado, comando: ComandoRegistrarEvento): boolean {
+  return (
+    vigente.estado.valor === comando.estado &&
+    vigente.fechaEvento.toISOString() === new Date(comando.fechaEvento).toISOString() &&
+    observacionesIguales(vigente.observacion, comando.observacion)
+  );
+}
+
+function observacionesIguales(a: string | undefined, b: string | undefined): boolean {
+  return (a ?? null) === (b ?? null);
 }

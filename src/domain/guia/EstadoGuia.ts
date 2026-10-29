@@ -14,6 +14,10 @@ export class EstadoGuia {
   static readonly ENTREGADA = new EstadoGuia("ENTREGADA");
   static readonly DEVUELTA = new EstadoGuia("DEVUELTA");
 
+  private static readonly REGRESIONES_BLOQUEADAS = new Set<string>([
+    "EN_RUTA->CREADA",
+  ]);
+
   static desde(valor: string): EstadoGuia {
     if (!ESTADOS_NEGOCIO.includes(valor as EstadoValor)) {
       throw new ErrorNegocio("INVALID_STATUS", 400, `Estado no válido para guía: '${valor}'`);
@@ -29,8 +33,10 @@ export class EstadoGuia {
     return TERMINALES.has(this.valor);
   }
 
-  puedeTransicionarA(_destino: EstadoGuia): boolean {
-    return !this.esTerminal();
+  puedeTransicionarA(destino: EstadoGuia): boolean {
+    if (this.esTerminal()) return false;
+    if (EstadoGuia.REGRESIONES_BLOQUEADAS.has(`${this.valor}->${destino.valor}`)) return false;
+    return true;
   }
 
   equals(otro: EstadoGuia): boolean {
