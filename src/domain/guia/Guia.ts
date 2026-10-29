@@ -1,6 +1,7 @@
 import { ErrorNegocio } from "../errors.js";
 import { EstadoGuia } from "./EstadoGuia.js";
 import { EventoDeEstado } from "./EventoDeEstado.js";
+import { ordenarEventosCronologicamente } from "./orden-cronologico.js";
 
 export interface SolicitudDeEvento {
   eventId: string;
@@ -14,7 +15,7 @@ export class Guia {
   private constructor(
     readonly tenantId: string,
     readonly guiaId: string,
-    private readonly historialEventos: EventoDeEstado[],
+    private historialEventos: EventoDeEstado[],
   ) {}
 
   static vacia(tenantId: string, guiaId: string): Guia {
@@ -22,13 +23,17 @@ export class Guia {
   }
 
   static reconstruir(tenantId: string, guiaId: string, eventos: EventoDeEstado[]): Guia {
-    return new Guia(tenantId, guiaId, [...eventos]);
+    return new Guia(tenantId, guiaId, ordenarEventosCronologicamente(eventos));
   }
 
   eventos(): readonly EventoDeEstado[] {
     return this.historialEventos;
   }
 
+  /**
+   * Estado vigente = el del evento con mayor fechaEvento
+   * (desempate por fechaRegistro), no el último recibido.
+   */
   estadoActual(): EstadoGuia | null {
     const ultimo = this.historialEventos[this.historialEventos.length - 1];
     return ultimo ? ultimo.estado : null;
@@ -39,21 +44,44 @@ export class Guia {
   }
 
   registrarEvento(solicitud: SolicitudDeEvento): EventoDeEstado {
-    const estadoActual = this.estadoActual();
-    if (estadoActual !== null && !estadoActual.puedeTransicionarA(solicitud.estado)) {
-      throw nuevaTransicionInvalida(estadoActual, solicitud.estado);
+    const vigenteEvento = this.historialEventos[this.historialEventos.length - 1] ?? null;
+
+    if (vigenteEvento?.estado.esTerminal()) {
+      throw new TransicionInvalidaParaGuia(vigenteEvento.estado.valor, solicitud.estado.valor);
     }
+
+    const fechaEntrante = new Date(solicitud.fechaEvento);
+    if (vigenteEvento) {
+      if (fechaEntrante.getTime() < vigenteEvento.fechaEvento.getTime()) {
+        this.validarInsercionHistorica(solicitud, this.historialEventos);
+      } else if (!vigenteEvento.estado.puedeTransicionarA(solicitud.estado)) {
+        throw new RegresionInvalidaParaGuia(vigenteEvento.estado.valor, solicitud.estado.valor);
+      }
+    }
+
     const evento = EventoDeEstado.crear({
       eventId: solicitud.eventId,
       tenantId: this.tenantId,
       guiaId: this.guiaId,
       estado: solicitud.estado,
-      fechaEvento: solicitud.fechaEvento,
+      fechaEvento: fechaEntrante,
       observacion: solicitud.observacion,
       fechaRegistro: solicitud.fechaRegistro,
     });
-    this.historialEventos.push(evento);
+    this.historialEventos = ordenarEventosCronologicamente([...this.historialEventos, evento]);
     return evento;
+  }
+
+  private validarInsercionHistorica(solicitud: SolicitudDeEvento, ordenados: EventoDeEstado[]): void {
+    const fechaEntrante = new Date(solicitud.fechaEvento).getTime();
+    const siguiente = ordenados.find((e) => e.fechaEvento.getTime() > fechaEntrante);
+    if (siguiente && !solicitud.estado.puedeTransicionarA(siguiente.estado)) {
+      throw new EventoTardioIncoherente(
+        solicitud.estado.valor,
+        siguiente.estado.valor,
+        siguiente.fechaEvento,
+      );
+    }
   }
 }
 
@@ -77,9 +105,12 @@ class RegresionInvalidaParaGuia extends ErrorNegocio {
   }
 }
 
-function nuevaTransicionInvalida(estadoActual: EstadoGuia, destino: EstadoGuia): ErrorNegocio {
-  if (estadoActual.esTerminal()) {
-    return new TransicionInvalidaParaGuia(estadoActual.valor, destino.valor);
+class EventoTardioIncoherente extends ErrorNegocio {
+  constructor(estadoTardio: string, estadoSiguiente: string, fechaSiguiente: Date) {
+    super(
+      "INVALID_TRANSITION",
+      409,
+      `Late event is not coherent: state '${estadoTardio}' cannot precede '${estadoSiguiente}' (fechaEvento ${fechaSiguiente.toISOString()})`,
+    );
   }
-  return new RegresionInvalidaParaGuia(estadoActual.valor, destino.valor);
 }
