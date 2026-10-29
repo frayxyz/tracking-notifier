@@ -146,20 +146,37 @@ Comando único: `npm test` (unitarias + integración contra PostgreSQL real vía
 
 ## Observabilidad (trazas y métricas)
 
-- **Trazas (OpenTelemetry → Jaeger)**: la API exporta spans automáticos (http → express → pg)
-  y spans de negocio (`outbox.ciclo` con resultados del batch, `webhook.despachar` con url,
-  httpStatus y errores). Al levantar compose, abre **http://localhost:16686** → servicio
-  `tracking-notifier` → verás el recorrido completo de cada petición y cada intento de webhook
-  (incluidos los reintentos fallidos hacia `/fail` con su motivo).
-  - Transporte: exporter **Zipkin** (JSON) de OTel hacia el colector Zipkin de Jaeger
-    (`:9411`); decisión pragmática: el transporte OTLP-HTTP del SDK de JS mostró problemas
-    de envío silencioso en este entorno, el Zipkin es el pipeline viejo y estable — igualmente
-    compatible con Jaeger y con cualquier backend Zipkin/OTel.
-  - Guard `OTEL_ENABLED`: en tests y modo local sin colector el tracing queda apagado (no
-    cambia el comportamiento de negocio ni añade latencia).
-- **Métricas (Prometheus)**: `GET /metrics` expone contadores del negocio (entregadas,
-  fallidas, intentos de webhook con etiqueta `resultado`, peticiones HTTP por ruta/estado)
-  más métricas por defecto del proceso. Listo para scrapes de Prometheus o Grafana.
+- **Métricas visuales (Prometheus + Grafana)** — con `docker compose up` quedan disponibles:
+
+  | Servicio | URL | Qué es |
+  |---|---|---|
+  | Grafana | **http://localhost:3001** (admin/admin) | Dashboard **"tracking-notifier — métricas de negocio"** ya cargado, con paneles en español |
+  | Prometheus | http://localhost:9090 | Almacena las series; target `tracking-notifier` → `up` |
+  | `/metrics` | http://localhost:3000/metrics | Exposición cruda (texto) que Prometheus raspea cada 5 s |
+
+  Paneles del dashboard (se actualizan en vivo con la demo):
+
+  | Panel | Métrica | Qué cuenta |
+  |---|---|---|
+  | Eventos aceptados (201) | `tracking_eventos_aceptados_total` | Eventos de guías aceptados y persistidos |
+  | Eventos duplicados | `tracking_eventos_duplicados_total` | Ignorados por idempotencia (mismo eventId o contenido idéntico) |
+  | Eventos rechazados por motivo | `tracking_eventos_rechazados_total{motivo}` | `transicion_invalida` (409), `estado_invalido`, `payload_invalido` (400) |
+  | Notificaciones entregadas | `tracking_notificaciones_entregadas_total` | Webhooks entregados al cliente |
+  | Notificaciones fallidas | `tracking_notificaciones_fallidas_total` | Agotaron 5 intentos → FAILED (consultable por API) |
+  | Backlog del outbox | `tracking_notificaciones_en_bandeja` | Notificaciones PENDING ahora mismo |
+  | Intentos de webhook éxito/fallo | `tracking_webhook_intentos_total{resultado}` | La historia de reintentos, en visual |
+  | Latencia del webhook p50/p95 | `tracking_webhook_latencia_segundos` | Duración del POST al cliente |
+  | Peticiones HTTP por ruta | `http_requests_total{route,status}` | Tráfico y códigos de la API |
+
+  Para verlos moverse: corre `scripts/demo.ps1` (o los pasos manuales de arriba) y observa
+  el panel de reintentos y el contador de fallidas crecer en tiempo real.
+
+- **Decisión de diseño (observabilidad)**: elegimos el camino **métricas** del opcional del reto
+  (Prometheus + Grafana, estándar de la industria, cero dependencia de SaaS). Se evaluó también
+  trazas distribuidas (OpenTelemetry → Jaeger) —se implementó y se retiró por simplificación
+  deliberada: el pipeline OTLP del SDK JS no fue confiable en este entorno y las métricas cubren
+  el valor observacional que el sistema necesita (la trazabilidad fina por operación ya la dan
+  los logs JSON estructurados con `eventId`/`tenantId`).
 
 ## Qué hace el webhook de prueba
 
